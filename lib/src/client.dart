@@ -1620,7 +1620,7 @@ class Client extends MatrixApi {
 
     contentType ??= lookupMimeType(filename ?? '', headerBytes: file);
     final mxc = await super
-        .uploadContentFile(file, filename: filename, contentType: contentType);
+        .uploadContent(file, filename: filename, contentType: contentType);
 
     final database = this.database;
     if (file.length <= database.maxFileSize) {
