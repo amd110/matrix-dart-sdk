@@ -186,7 +186,10 @@ class NativeImplementationsIsolate extends NativeImplementations {
     bool retryInDummy = true,
   }) {
     return runInBackground<EncryptedFile, Uint8List>(
-      crypto_utils.encryptFile,
+      (Uint8List args) async {
+        await vodozemacInit?.call();
+        return NativeImplementations.dummy.encryptFile(args);
+      },
       bytes,
     );
   }
