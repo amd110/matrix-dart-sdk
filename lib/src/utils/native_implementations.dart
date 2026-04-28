@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix/src/utils/compute_callback.dart';
+import 'package:matrix/src/utils/crypto/encrypted_file.dart' as crypto_utils;
 
 /// provides native implementations for demanding arithmetic operations
 /// in order to prevent the UI from blocking
@@ -99,6 +100,14 @@ class NativeImplementationsDummy extends NativeImplementations {
     bool retryInDummy = true,
   }) {
     return decryptFileImplementation(file);
+  }
+
+  @override
+  FutureOr<EncryptedFile> encryptFile(
+    Uint8List bytes, {
+    bool retryInDummy = true,
+  }) {
+    return crypto_utils.encryptFile(bytes);
   }
 
   @override
