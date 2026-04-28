@@ -1019,14 +1019,14 @@ class Room {
             .unsigned![messageSendingStatusKey] = EventStatus.error.intValue;
         await _handleFakeSync(syncUpdate);
         rethrow;
-      } catch (_) {
+      } catch (e,s) {
         if (DateTime.now().isAfter(timeoutDate)) {
           syncUpdate.rooms!.join!.values.first.timeline!.events!.first
               .unsigned![messageSendingStatusKey] = EventStatus.error.intValue;
           await _handleFakeSync(syncUpdate);
           rethrow;
         }
-        Logs().v('Send File into room failed. Try again...');
+        Logs().w('Send File into room failed. Try again...', e, s);
         await Future.delayed(Duration(seconds: 1));
       }
     }
