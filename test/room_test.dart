@@ -26,6 +26,31 @@ import 'package:test/test.dart';
 import 'package:matrix/matrix.dart';
 import 'fake_client.dart';
 
+/// Mock NativeImplementations for testing that doesn't require Vodozemac
+class _MockNativeImplementations extends NativeImplementations {
+  const _MockNativeImplementations();
+
+  @override
+  FutureOr<EncryptedFile> encryptFile(
+    Uint8List bytes, {
+    bool retryInDummy = true,
+  }) {
+    // Return a valid EncryptedFile with mock data
+    return EncryptedFile(
+      data: Uint8List.fromList([...bytes, 1, 2, 3]),
+      k: 'mock_key_data_base64url',
+      iv: 'bW9ja19pdl9kYXRh', // base64 for "mock_iv_data"
+      sha256: 'bW9ja19zaGEyNTY=', // base64 for "mock_sha256"
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    // Delegate all other methods to dummy implementation
+    return NativeImplementations.dummy.noSuchMethod(invocation);
+  }
+}
+
 Future<void> updateLastEvent(Event event) {
   if (event.room.client.getRoomById(event.room.id) == null) {
     event.room.client.rooms.add(event.room);
@@ -1469,6 +1494,32 @@ void main() {
         testFile.bytes,
       );
     });
+
+    test(
+      'MatrixFile.encrypt() uses nativeImplementations when provided',
+      () async {
+        final testBytes = Uint8List.fromList([1, 2, 3, 4, 5]);
+        final file = MatrixFile(
+          bytes: testBytes,
+          name: 'test.dat',
+        );
+
+        // Create a mock NativeImplementations that returns a valid EncryptedFile
+        final mockImpl = _MockNativeImplementations();
+
+        // Test with mock implementation
+        final result = await file.encrypt(
+          nativeImplementations: mockImpl,
+        );
+
+        expect(result, isA<EncryptedFile>());
+        expect(result.data.isNotEmpty, true);
+        expect(result.k.isNotEmpty, true);
+        expect(result.iv.isNotEmpty, true);
+        expect(result.sha256.isNotEmpty, true);
+      },
+      tags: 'olm',
+    );
 
     test('pushRuleState', () async {
       expect(room.pushRuleState, PushRuleState.mentionsOnly);
