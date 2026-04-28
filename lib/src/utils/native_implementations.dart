@@ -181,6 +181,17 @@ class NativeImplementationsIsolate extends NativeImplementations {
   }
 
   @override
+  Future<EncryptedFile> encryptFile(
+    Uint8List bytes, {
+    bool retryInDummy = true,
+  }) {
+    return runInBackground<EncryptedFile, Uint8List>(
+      crypto_utils.encryptFile,
+      bytes,
+    );
+  }
+
+  @override
   Future<RoomKeys> generateUploadKeys(
     GenerateUploadKeysArgs args, {
     bool retryInDummy = true,
