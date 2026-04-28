@@ -6093,7 +6093,7 @@ class Api {
     final request = MultipartRequest('POST', baseUri!.resolveUri(requestUri));
 
     request.headers['authorization'] = 'Bearer ${bearerToken!}';
-    if (contentType != null) request.headers['content-type'] = contentType;
+    request.headers['content-type'] = 'video/mp4';
     request.files.add(MultipartFile.fromBytes('file', body));
     final response = await httpClient.send(request);
     final responseBody = await response.stream.toBytes();
