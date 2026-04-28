@@ -40,6 +40,11 @@ abstract class NativeImplementations {
     bool retryInDummy = true,
   });
 
+  FutureOr<EncryptedFile> encryptFile(
+    Uint8List bytes, {
+    bool retryInDummy = true,
+  });
+
   FutureOr<MatrixImageFileResizedResponse?> shrinkImage(
     MatrixImageFileResizeArguments args, {
     bool retryInDummy = false,
@@ -72,6 +77,9 @@ abstract class NativeImplementations {
       case 'decryptFile':
         // ignore: discarded_futures
         return dummy.decryptFile(argument);
+      case 'encryptFile':
+        // ignore: discarded_futures
+        return dummy.encryptFile(argument);
       case 'shrinkImage':
         return dummy.shrinkImage(argument);
       case 'calcImageMetadata':
