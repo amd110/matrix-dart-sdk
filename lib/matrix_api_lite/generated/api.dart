@@ -1,9 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart';
-
 import 'package:matrix/matrix_api_lite/generated/fixed_model.dart';
 import 'package:matrix/matrix_api_lite/generated/internal.dart';
 import 'package:matrix/matrix_api_lite/generated/model.dart';
@@ -6069,32 +6067,6 @@ class Api {
     request.headers['authorization'] = 'Bearer ${bearerToken!}';
     if (contentType != null) request.headers['content-type'] = contentType;
     request.bodyBytes = body;
-    final response = await httpClient.send(request);
-    final responseBody = await response.stream.toBytes();
-    if (response.statusCode != 200) unexpectedResponse(response, responseBody);
-    final responseString = utf8.decode(responseBody);
-    final json = jsonDecode(responseString);
-    return ((json['content_uri'] as String).startsWith('mxc://')
-        ? Uri.parse(json['content_uri'] as String)
-        : throw Exception('Uri not an mxc URI'));
-  }
-
-  Future<Uri> uploadContentFile(
-    Uint8List body, {
-    String? filename,
-    String? contentType,
-  }) async {
-    final requestUri = Uri(
-      path: '_matrix/media/v3/upload',
-      queryParameters: {
-        if (filename != null) 'filename': filename,
-      },
-    );
-    final request = MultipartRequest('POST', baseUri!.resolveUri(requestUri));
-
-    request.headers['authorization'] = 'Bearer ${bearerToken!}';
-    request.headers['content-type'] = 'video/mp4';
-    request.files.add(MultipartFile.fromBytes('file', body));
     final response = await httpClient.send(request);
     final responseBody = await response.stream.toBytes();
     if (response.statusCode != 200) unexpectedResponse(response, responseBody);
