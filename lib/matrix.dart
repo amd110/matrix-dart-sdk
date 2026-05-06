@@ -63,6 +63,8 @@ export 'src/utils/matrix_default_localizations.dart';
 export 'src/utils/matrix_file.dart';
 export 'src/utils/matrix_id_string_extension.dart';
 export 'src/utils/matrix_localizations.dart';
+export 'src/utils/multipart_request_progress.dart'
+    show CancellationToken, DownloadCancelledException;
 export 'src/utils/native_implementations.dart';
 export 'src/utils/room_enums.dart';
 export 'src/utils/room_member_change_type.dart';

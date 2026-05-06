@@ -814,9 +814,12 @@ class Event extends MatrixEvent {
     Future<Uint8List> Function(Uri)? downloadCallback,
     bool fromLocalStoreOnly = false,
 
-    /// Callback which gets triggered on progress containing the amount of
-    /// downloaded bytes.
+    /// 下载进度回调，参数为已下载的字节数。
     void Function(int)? onDownloadProgress,
+
+    /// 可选的取消令牌，调用 [CancellationToken.cancel] 可中断下载或解密。
+    /// 取消后抛出 [DownloadCancelledException]。
+    CancellationToken? cancellationToken,
   }) async {
     if (![EventTypes.Message, EventTypes.Sticker].contains(type)) {
       throw ("This event has the type '$type' and so it can't contain an attachment.");
@@ -848,9 +851,11 @@ class Event extends MatrixEvent {
       uint8list = await room.client.database.getFile(mxcUrl);
     }
 
-    // Download the file
+    // 下载文件
     final canDownloadFileFromServer = uint8list == null && !fromLocalStoreOnly;
     if (canDownloadFileFromServer) {
+      // 下载开始前检查取消标志，避免发起无效请求
+      cancellationToken?.throwIfCancelled();
       final httpClient = room.client.httpClient;
       downloadCallback ??= (Uri url) async {
         final request = http.Request('GET', url);
@@ -861,6 +866,7 @@ class Event extends MatrixEvent {
         return await response.stream.toBytesWithProgress(
           onDownloadProgress,
           contentLength: response.contentLength,
+          cancellationToken: cancellationToken,
         );
       };
       uint8list =
@@ -877,7 +883,8 @@ class Event extends MatrixEvent {
       throw ('Unable to download file from local store.');
     }
 
-    // Decrypt the file
+    // 解密文件前再次检查取消标志，避免对已取消的任务执行耗时的 AES 解密
+    cancellationToken?.throwIfCancelled();
     if (isEncrypted) {
       final fileMap = getThumbnail
           ? infoMap.tryGetMap<String, Object?>('thumbnail_file')
