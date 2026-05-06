@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:matrix/encryption.dart';
@@ -141,6 +142,154 @@ class NativeImplementationsDummy extends NativeImplementations {
   }) {
     return MatrixImageFile.calcMetadataImplementation(bytes);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 持久化 Isolate 实现：vodozemac 只初始化一次，所有操作复用同一个 Isolate
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 持久化 isolate 的请求消息
+class _NativeRequest {
+  final String method;
+  final Object? arg;
+  final SendPort replyPort;
+  const _NativeRequest(this.method, this.arg, this.replyPort);
+}
+
+/// 持久化 isolate 的初始化参数
+class _NativeIsolateInitArgs {
+  final SendPort readyPort;
+  final Future<void> Function()? vodozemacInit;
+  const _NativeIsolateInitArgs(this.readyPort, this.vodozemacInit);
+}
+
+/// 持久化 isolate 入口：初始化一次 vodozemac，然后进入消息循环处理所有请求
+Future<void> _persistentIsolateMain(_NativeIsolateInitArgs args) async {
+  await args.vodozemacInit?.call();
+
+  final receivePort = ReceivePort();
+  // 通知外部：isolate 已就绪，返回 SendPort
+  args.readyPort.send(receivePort.sendPort);
+
+  const dummy = NativeImplementations.dummy;
+
+  await for (final message in receivePort) {
+    if (message is! _NativeRequest) continue;
+    try {
+      final result = switch (message.method) {
+        'decryptFile' =>
+          await dummy.decryptFile(message.arg as EncryptedFile),
+        'encryptFile' =>
+          await dummy.encryptFile(message.arg as Uint8List),
+        'generateUploadKeys' =>
+          await dummy.generateUploadKeys(message.arg as GenerateUploadKeysArgs),
+        'keyFromPassphrase' =>
+          await dummy.keyFromPassphrase(message.arg as KeyFromPassphraseArgs),
+        'shrinkImage' =>
+          dummy.shrinkImage(message.arg as MatrixImageFileResizeArguments),
+        'calcImageMetadata' =>
+          dummy.calcImageMetadata(message.arg as Uint8List),
+        _ => throw UnsupportedError('Unknown method: ${message.method}'),
+      };
+      message.replyPort.send((result: result, error: null));
+    } catch (e) {
+      message.replyPort.send((result: null, error: e));
+    }
+  }
+}
+
+/// [NativeImplementations] 的持久化 Isolate 实现。
+///
+/// 与 [NativeImplementationsIsolate]（基于 `compute`，每次调用都启动临时 isolate
+/// 并重新执行 vodozemacInit）不同，本实现只创建一个长生命周期的后台 isolate，
+/// vodozemac 仅初始化一次，所有后续操作都复用同一个 isolate 通道。
+///
+/// 适用于需要频繁解密（如消息列表中大量加密图片/视频）的场景，可避免因反复
+/// 初始化 Rust 库导致的线程积压和 iOS Watchdog 超时崩溃。
+///
+/// ```dart
+/// final client = Client(
+///   'MyApp',
+///   nativeImplementations: NativeImplementationsPersistentIsolate(
+///     vodozemacInit: () => vod.init(wasmPath: '...'),
+///   ),
+/// );
+/// ```
+class NativeImplementationsPersistentIsolate extends NativeImplementations {
+  final Future<void> Function()? vodozemacInit;
+
+  NativeImplementationsPersistentIsolate({this.vodozemacInit});
+
+  Isolate? _isolate;
+  SendPort? _sendPort;
+  Future<void>? _initFuture;
+
+  /// 确保 isolate 已启动，返回可用的 SendPort
+  Future<SendPort> _ensureStarted() async {
+    if (_sendPort != null) return _sendPort!;
+    _initFuture ??= _spawnIsolate();
+    await _initFuture;
+    return _sendPort!;
+  }
+
+  Future<void> _spawnIsolate() async {
+    final readyPort = ReceivePort();
+    _isolate = await Isolate.spawn(
+      _persistentIsolateMain,
+      _NativeIsolateInitArgs(readyPort.sendPort, vodozemacInit),
+      debugName: 'matrix_crypto_worker',
+    );
+    _sendPort = await readyPort.first as SendPort;
+    readyPort.close();
+  }
+
+  Future<T> _call<T>(String method, Object? arg) async {
+    final sendPort = await _ensureStarted();
+    final replyPort = ReceivePort();
+    sendPort.send(_NativeRequest(method, arg, replyPort.sendPort));
+    final reply = await replyPort.first as ({Object? result, Object? error});
+    replyPort.close();
+    if (reply.error != null) throw reply.error!;
+    return reply.result as T;
+  }
+
+  /// 释放持久化 isolate。通常不需要手动调用，进程退出时会自动清理。
+  void dispose() {
+    _isolate?.kill(priority: Isolate.beforeNextEvent);
+    _isolate = null;
+    _sendPort = null;
+    _initFuture = null;
+  }
+
+  @override
+  Future<Uint8List?> decryptFile(EncryptedFile file, {bool retryInDummy = true}) =>
+      _call('decryptFile', file);
+
+  @override
+  Future<EncryptedFile> encryptFile(Uint8List bytes, {bool retryInDummy = true}) =>
+      _call('encryptFile', bytes);
+
+  @override
+  Future<RoomKeys> generateUploadKeys(GenerateUploadKeysArgs args, {bool retryInDummy = true}) =>
+      _call('generateUploadKeys', args);
+
+  @override
+  Future<Uint8List> keyFromPassphrase(KeyFromPassphraseArgs args, {bool retryInDummy = true}) =>
+      _call('keyFromPassphrase', args);
+
+  @override
+  Future<MatrixImageFileResizedResponse?> shrinkImage(
+    MatrixImageFileResizeArguments args, {
+    bool retryInDummy = false,
+  }) =>
+      _call('shrinkImage', args);
+
+  @override
+  Future<MatrixImageFileResizedResponse?> calcImageMetadata(
+    Uint8List bytes, {
+    bool retryInDummy = false,
+  }) =>
+      _call('calcImageMetadata', bytes);
 }
 
 /// a [NativeImplementations] based on Flutter's `compute` function
