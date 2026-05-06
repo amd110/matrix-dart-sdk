@@ -858,7 +858,10 @@ class Event extends MatrixEvent {
 
         final response = await httpClient.send(request);
 
-        return await response.stream.toBytesWithProgress(onDownloadProgress);
+        return await response.stream.toBytesWithProgress(
+          onDownloadProgress,
+          contentLength: response.contentLength,
+        );
       };
       uint8list =
           await downloadCallback(await mxcUrl.getDownloadUri(room.client));
