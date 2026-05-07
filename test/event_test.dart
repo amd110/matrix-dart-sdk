@@ -2575,6 +2575,68 @@ void main() async {
       await room.client.dispose(closeDatabase: true);
     });
 
+    test('downloadAndDecryptAttachment caches decrypted content', tags: 'olm',
+        () async {
+      final FILE_BUFF_ENC = Uint8List.fromList([0x3B, 0x6B, 0xB2, 0x8C, 0xAF]);
+      final FILE_BUFF_DEC = Uint8List.fromList([0x74, 0x65, 0x73, 0x74, 0x0A]);
+      var serverHits = 0;
+      Future<Uint8List> downloadCallback(Uri uri) async {
+        serverHits++;
+        return FILE_BUFF_ENC;
+      }
+
+      final room = Room(id: '!localpart:server.abc', client: await getClient());
+      final event = Event.fromJson(
+        {
+          'type': EventTypes.Message,
+          'content': {
+            'body': 'file',
+            'msgtype': 'm.file',
+            'file': {
+              'v': 'v2',
+              'key': {
+                'alg': 'A256CTR',
+                'ext': true,
+                'k': '7aPRNIDPeUAUqD6SPR3vVX5W9liyMG98NexVJ9udnCc',
+                'key_ops': ['encrypt', 'decrypt'],
+                'kty': 'oct',
+              },
+              'iv': 'Wdsf+tnOHIoAAAAAAAAAAA',
+              'hashes': {
+                'sha256': 'WgC7fw2alBC5t+xDx+PFlZxfFJXtIstQCg+j0WDaXxE',
+              },
+              'url': 'mxc://example.com/cachedenc',
+              'mimetype': 'text/plain',
+            },
+            'info': {'size': 5},
+          },
+          'event_id': r'$cachetest',
+          'sender': '@alice:example.org',
+        },
+        room,
+      );
+
+      // 第一次：从服务器下载并解密
+      final buffer1 = await event.downloadAndDecryptAttachment(
+        downloadCallback: downloadCallback,
+      );
+      expect(buffer1.bytes, FILE_BUFF_DEC);
+      expect(serverHits, 1);
+
+      // 第二次：若数据库支持文件存储，应命中解密缓存，不再请求服务器
+      final buffer2 = await event.downloadAndDecryptAttachment(
+        downloadCallback: downloadCallback,
+      );
+      expect(buffer2.bytes, FILE_BUFF_DEC);
+      expect(
+        serverHits,
+        event.room.client.database.supportsFileStoring ? 1 : 2,
+        reason: 'IO 平台应命中解密缓存，不再访问服务器',
+      );
+
+      await room.client.dispose(closeDatabase: true);
+    });
+
     test('downloadAndDecryptAttachment store only', tags: 'olm', () async {
       final FILE_BUFF = Uint8List.fromList([0]);
       var serverHits = 0;
