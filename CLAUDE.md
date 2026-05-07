@@ -1,64 +1,64 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本文件为 Claude Code（claude.ai/code）在此代码库中工作时提供指导。
 
-## Repository Overview
+## 仓库概述
 
-**Matrix Dart SDK** is a comprehensive client SDK for the Matrix protocol written in pure Dart. It handles synchronization, room management, message events, VoIP, end-to-end encryption (E2EE), and database persistence. The SDK supports web, native (IO), and Flutter platforms.
+**Matrix Dart SDK** 是一个用纯 Dart 编写的 Matrix 协议完整客户端 SDK，负责同步、房间管理、消息事件、VoIP、端对端加密（E2EE）及数据库持久化。SDK 支持 Web、原生（IO）和 Flutter 平台。
 
-### Key Components
+### 核心组件
 
-- **Client** (`lib/src/client.dart`): Main entry point — manages login, sync, room lifecycle, and server communication
-- **Room** (`lib/src/room.dart`): Represents a Matrix room with event history, members, and state
-- **Event** (`lib/src/event.dart`): Represents individual Matrix events (messages, state changes, etc.)
-- **Timeline** (`lib/src/timeline.dart`): Manages paginated message history for a room
-- **Encryption** (`lib/encryption.dart`): E2EE support via vodozemac (Rust bindings)
-- **Database** (`lib/src/database/`): Persistent storage using SQFlite or SQLite with encryption support
-- **Matrix API Lite** (`lib/matrix_api_lite.dart`): Low-level HTTP bindings to Matrix Client-Server API
-- **VoIP** (`lib/src/voip/`): Call session management with WebRTC support (mesh and LiveKit backends)
-- **MSC Extensions** (`lib/msc_extensions/`): Matrix Spec Change (MSC) proposals (polls, widgets, OIDC, etc.)
+- **Client**（`lib/src/client.dart`）：主入口——管理登录、同步、房间生命周期和服务器通信
+- **Room**（`lib/src/room.dart`）：表示一个 Matrix 房间，包含事件历史、成员和状态
+- **Event**（`lib/src/event.dart`）：表示单个 Matrix 事件（消息、状态变更等）
+- **Timeline**（`lib/src/timeline.dart`）：管理房间的分页消息历史
+- **Encryption**（`lib/encryption.dart`）：通过 vodozemac（Rust 绑定）提供 E2EE 支持
+- **Database**（`lib/src/database/`）：使用 SQFlite 或 SQLite 提供持久化存储，支持加密
+- **Matrix API Lite**（`lib/matrix_api_lite.dart`）：Matrix 客户端-服务器 API 的底层 HTTP 绑定
+- **VoIP**（`lib/src/voip/`）：支持 WebRTC 的通话会话管理（mesh 和 LiveKit 后端）
+- **MSC 扩展**（`lib/msc_extensions/`）：Matrix 规范变更提案（投票、Widget、OIDC 等）
 
-## Development Commands
+## 开发命令
 
-### Setup & Dependencies
+### 安装与依赖
 
 ```bash
-dart pub get              # Install dependencies
-pub global activate coverage  # For coverage reporting (CI does this)
+dart pub get              # 安装依赖
+pub global activate coverage  # 用于覆盖率报告（CI 会自动执行）
 ```
 
-### Code Quality
+### 代码质量
 
 ```bash
-dart format lib test      # Format code (required for CI)
-dart analyze              # Run static analysis with configured lints (includes famedly_dart_lints)
-import_sorter --set-exit-if-changed .  # Sort imports (enforced by CI)
+dart format lib test      # 格式化代码（CI 必须通过）
+dart analyze              # 运行静态分析（包含 famedly_dart_lints）
+import_sorter --set-exit-if-changed .  # 排序导入（CI 强制执行）
 ```
 
-### Testing
+### 测试
 
 ```bash
-# Run all tests with concurrency (default: number of CPU cores)
+# 以并发方式运行所有测试（默认并发数为 CPU 核心数）
 dart test --concurrency=$(getconf _NPROCESSORS_ONLN) test
 
-# Run specific test file
+# 运行特定测试文件
 dart test test/client_test.dart
 
-# Skip E2EE/OLM tests (which require setup)
+# 跳过需要环境配置的 E2EE/OLM 测试
 dart test --concurrency=$(getconf _NPROCESSORS_ONLN) test -x olm
 
-# Run only OLM-specific tests (requires prior E2EE setup)
+# 仅运行 OLM 相关测试（需提前配置 E2EE 环境）
 dart test --concurrency=$(getconf _NPROCESSORS_ONLN) test -t olm
 
-# Generate coverage report (also cleans up generated files)
+# 生成覆盖率报告（同时清理生成的文件）
 ./scripts/test.sh
 
-# Web platform test (Chrome required)
+# Web 平台测试（需要 Chrome）
 dart test test/box_test.dart --platform chrome
 
-# E2EE integration tests (runs local homeserver — Synapse/Dendrite/Conduit)
-# See scripts/integration-*.sh for details
-export HOMESERVER_IMPLEMENTATION=synapse  # or dendrite/conduit
+# E2EE 集成测试（需启动本地 homeserver：Synapse/Dendrite/Conduit）
+# 详见 scripts/integration-*.sh
+export HOMESERVER_IMPLEMENTATION=synapse  # 或 dendrite/conduit
 scripts/integration-server-${HOMESERVER_IMPLEMENTATION}.sh 2>&1 > /dev/null &
 source scripts/integration-create-environment-variables.sh
 scripts/integration-prepare-homeserver.sh
@@ -67,68 +67,68 @@ scripts/prepare_vodozemac.sh
 dart test test_driver/matrixsdk_test.dart -p vm
 ```
 
-### CI Workflow
+### CI 工作流
 
-The repository uses GitHub Actions (`.github/workflows/integrate.yml`):
-- **Dart checks**: Formatting, analysis, linting via `famedly/frontend-ci-templates` shared workflow
-- **E2EE tests**: Run against Synapse, Dendrite, and Conduit homeservers (optional fail-fast)
-- **Coverage**: Two runs — with OLM and without — merged for total coverage reporting
-- **Web compatibility**: Ensures SDK compiles to JavaScript via `webdev`
-- **Database web tests**: Chrome-based tests for SQFlite web support
+仓库使用 GitHub Actions（`.github/workflows/integrate.yml`）：
+- **Dart 检查**：通过 `famedly/frontend-ci-templates` 共享工作流进行格式化、分析和 lint
+- **E2EE 测试**：在 Synapse、Dendrite 和 Conduit homeserver 上运行（可选 fail-fast）
+- **覆盖率**：分两次运行（含 OLM 和不含 OLM），合并后生成完整报告
+- **Web 兼容性**：通过 `webdev` 确保 SDK 能编译为 JavaScript
+- **数据库 Web 测试**：基于 Chrome 的 SQFlite Web 支持测试
 
-Tagging with `v*.*.*.` triggers automated publishing to pub.dev.
+打上 `v*.*.*.` 标签会自动发布到 pub.dev。
 
-## Architecture Patterns
+## 架构模式
 
-### Reactive Streams
+### 响应式流
 
-The SDK extensively uses Dart's `Stream` and `StreamController` for reactive updates:
-- **`onUpdate`**: Fired when room or event data changes
-- **`onInsert`**: Fired when new events arrive
-- **`onRemove`**: Fired on event deletion
-- **`syncStream`**: Emits sync status updates and connection state
+SDK 大量使用 Dart 的 `Stream` 和 `StreamController` 进行响应式更新：
+- **`onUpdate`**：房间或事件数据变化时触发
+- **`onInsert`**：新事件到达时触发
+- **`onRemove`**：事件删除时触发
+- **`syncStream`**：发出同步状态更新和连接状态
 
-Example: Timeline pagination triggers `onUpdate` callbacks; room member changes emit events on `updateNotifier`.
+示例：时间线分页触发 `onUpdate` 回调；房间成员变更在 `updateNotifier` 上发出事件。
 
-### Event Model
+### 事件模型
 
-**Event** is the base class; **MatrixEvent** (from API lite) provides raw protocol data. SDK Events wrap protocol data with:
-- Decryption state (encrypted, decrypted, failed)
-- Local caching (file downloads)
-- UI state (sending status, read receipts)
+**Event** 是基类；**MatrixEvent**（来自 API lite）提供原始协议数据。SDK Event 在协议数据之上封装了：
+- 解密状态（已加密、已解密、失败）
+- 本地缓存（文件下载）
+- UI 状态（发送状态、已读回执）
 
-Events are typically stored in rooms; timeline provides paginated access.
+事件通常存储在房间中；时间线提供分页访问。
 
-### Database & Caching
+### 数据库与缓存
 
-- **SQFlite/SQLite**: Persistent storage across sessions
-- **In-memory caches**: `CachedStreamController` for room/event data to avoid re-fetching
-- **Encryption**: SQFlite supports encrypted databases via `sqflite_encryption_helper`
-- **Web support**: BoxCollection uses IndexedDB on web platforms
+- **SQFlite/SQLite**：跨会话持久化存储
+- **内存缓存**：`CachedStreamController` 用于房间/事件数据，避免重复拉取
+- **加密**：SQFlite 通过 `sqflite_encryption_helper` 支持加密数据库
+- **Web 支持**：BoxCollection 在 Web 平台使用 IndexedDB
 
-### Client Lifecycle
+### 客户端生命周期
 
-1. **Create**: Instantiate `Client` with optional database
-2. **Check homeserver**: Validate server via `checkHomeserver(uri)`
-3. **Login**: Use password, OIDC, SSO, or device token flows
-4. **Sync**: Start recurring sync via `client.sync()` or `client.onSyncStream()`
-5. **Access rooms**: Iterate `client.rooms` or lookup by ID
-6. **Listen for events**: Subscribe to `room.onUpdate` or timeline streams
-7. **Logout**: Call `client.logout()` to clean up
+1. **创建**：实例化 `Client`（可选传入数据库）
+2. **检查 homeserver**：通过 `checkHomeserver(uri)` 验证服务器
+3. **登录**：支持密码、OIDC、SSO 或设备 token 流程
+4. **同步**：通过 `client.sync()` 或 `client.onSyncStream()` 启动持续同步
+5. **访问房间**：遍历 `client.rooms` 或按 ID 查找
+6. **监听事件**：订阅 `room.onUpdate` 或时间线流
+7. **登出**：调用 `client.logout()` 进行清理
 
-### E2EE Flow
+### E2EE 流程
 
-When E2EE is enabled (via `Client(..., encryption: encryption)` with vodozemac):
-1. Client manages device keys and uploads them to the server
-2. Outgoing messages are encrypted before sending
-3. Incoming encrypted events are queued and decrypted asynchronously
-4. Key verification and device trust are managed via the encryption module
+启用 E2EE 后（通过 `Client(..., encryption: encryption)` 配合 vodozemac）：
+1. Client 管理设备密钥并上传到服务器
+2. 发出的消息在发送前进行加密
+3. 收到的加密事件进入队列，异步解密
+4. 密钥验证和设备信任由 encryption 模块管理
 
-### File Encryption with Isolate Offloading
+### 文件加密与 Isolate 卸载
 
-Large file encryption (AES-CTR) can be offloaded to background Isolates when using `NativeImplementationsIsolate`. This prevents ANR (Application Not Responding) errors when encrypting large video/media files on Flutter apps.
+大文件加密（AES-CTR）可通过 `NativeImplementationsIsolate` 卸载到后台 Isolate，防止 Flutter 应用在加密大型视频/媒体文件时出现 ANR（应用无响应）错误。
 
-**Setup in Flutter app:**
+**在 Flutter 应用中配置：**
 ```dart
 import 'package:flutter/foundation.dart' show compute;
 import 'package:matrix/matrix.dart';
@@ -136,73 +136,77 @@ import 'package:matrix/matrix.dart';
 final client = Client(
   'MyApp',
   nativeImplementations: NativeImplementationsIsolate(compute),
-  // ... other config
+  // ... 其他配置
 );
 ```
 
-The SDK automatically uses the provided implementation during file uploads. File and thumbnail uploads are parallelized using `Future.wait()`, reducing total upload time by 30-50%. For non-Flutter or non-isolate environments, the `NativeImplementations.dummy` default is used (inline encryption, no offloading).
+SDK 在文件上传时自动使用所提供的实现。文件和缩略图上传通过 `Future.wait()` 并行执行，可将总上传时间缩短 30–50%。对于非 Flutter 或非 Isolate 环境，默认使用 `NativeImplementations.dummy`（内联加密，无卸载）。
 
-**API Compatibility**: The `MatrixFile.encrypt()` method accepts an optional `nativeImplementations` parameter with default value `NativeImplementations.dummy`, ensuring backward compatibility with existing code.
+**API 兼容性**：`MatrixFile.encrypt()` 方法接受可选的 `nativeImplementations` 参数，默认值为 `NativeImplementations.dummy`，确保与现有代码向后兼容。
 
-## Code Style & Conventions
+## 代码风格与规范
 
-Per CONTRIBUTING.md and famedly_dart_lints:
+遵循 CONTRIBUTING.md 和 famedly_dart_lints：
 
-- **File/dir names**: `snake_case`
-- **Imports**: Sorted and formatted via `import_sorter` and `dart format`
-- **Dartdoc**: All public classes, methods, and attributes must have documentation comments
-- **Classes over functions**: Use classes for widget-like code, not functions
-- **Avoid mixing paradigms**: Don't mix imperative state mutations (void returns) with functional programming
-- **Extensions**: Use Dart extensions to extend class functionality rather than wrapper classes
-- **No hardcoded strings**: Localize all user-facing text
-- **Configuration**: Use analysis_options.yaml for linting rules; some rules are disabled (see non_constant_identifier_names, sort_pub_dependencies) due to legacy code
+- **文件/目录名**：`snake_case`
+- **导入**：通过 `import_sorter` 和 `dart format` 排序和格式化
+- **Dartdoc**：所有公开类、方法和属性必须有文档注释
+- **类优于函数**：类似 Widget 的代码使用类而非函数
+- **避免混用范式**：不要将命令式状态变更（void 返回）与函数式编程混用
+- **扩展优于包装类**：使用 Dart 扩展来扩展类功能，而非包装类
+- **禁止硬编码字符串**：所有面向用户的文本需本地化
+- **配置**：在 analysis_options.yaml 中配置 lint 规则；部分规则因历史代码原因已禁用（见 non_constant_identifier_names、sort_pub_dependencies）
 
-## Common Workflows
+## 常见工作流
 
-### Adding a New API Endpoint
+### 新增 API 端点
 
-1. Define the request/response models in `lib/matrix_api_lite/...` (generated from spec)
-2. Add the HTTP method to `MatrixApi` in `lib/matrix_api_lite/matrix_api_lite.dart`
-3. If it affects Client behavior, add a wrapper method to `lib/src/client.dart`
-4. Write tests in `test/` mirroring the structure
-5. Document with dartdoc comments
+1. 在 `lib/matrix_api_lite/...` 中定义请求/响应模型（从规范生成）
+2. 在 `lib/matrix_api_lite/matrix_api_lite.dart` 的 `MatrixApi` 中添加 HTTP 方法
+3. 若影响 Client 行为，在 `lib/src/client.dart` 中添加包装方法
+4. 在 `test/` 中按对应结构编写测试
+5. 添加 dartdoc 注释
 
-### Handling Encrypted Events
+### 处理加密事件
 
-1. Incoming encrypted events are automatically queued in `_EventPendingDecryption`
-2. Decryption happens asynchronously; events emit updates via `onUpdate` when decrypted
-3. Failed decryptions remain in the timeline with `bodyIsPlaintext` flag set
-4. Use `event.content['body']` for plaintext fallback
+1. 收到的加密事件自动进入 `_EventPendingDecryption` 队列
+2. 解密异步进行；事件解密完成后通过 `onUpdate` 发出更新
+3. 解密失败的事件保留在时间线中，并设置 `bodyIsPlaintext` 标志
+4. 使用 `event.content['body']` 作为明文回退
 
-### Extending with MSC Features
+### 扩展 MSC 功能
 
-MSC extensions are in `lib/msc_extensions/`. They typically:
-- Export new model classes (e.g., `PollEventContent`)
-- Add extension methods to `Room` or `Client` (e.g., `room.createPoll()`)
-- Add utilities (e.g., `poll_room_extension.dart`)
+MSC 扩展位于 `lib/msc_extensions/`，通常：
+- 导出新的模型类（如 `PollEventContent`）
+- 为 `Room` 或 `Client` 添加扩展方法（如 `room.createPoll()`）
+- 添加工具类（如 `poll_room_extension.dart`）
 
-To use: `import 'package:matrix/msc_extensions/msc_3381_polls/poll_event_extension.dart'`
+使用方式：`import 'package:matrix/msc_extensions/msc_3381_polls/poll_event_extension.dart'`
 
-## Notable Dependencies
+## 主要依赖
 
-- **vodozemac**: Rust-based E2EE (requires native binary or flutter_vodozemac)
-- **SQFlite/SQLite**: Database with ForeignKey/encryption support
-- **http**: HTTP client with timeout configuration
-- **canonical_json**: Spec-compliant JSON encoding (used for signatures)
-- **webrtc_interface**: Abstraction over native WebRTC implementations
-- **markdown**: Event body parsing (with LaTeX support behind flag)
+- **vodozemac**：基于 Rust 的 E2EE（需要原生二进制或 flutter_vodozemac）
+- **SQFlite/SQLite**：支持外键和加密的数据库
+- **http**：带超时配置的 HTTP 客户端
+- **canonical_json**：符合规范的 JSON 编码（用于签名）
+- **webrtc_interface**：原生 WebRTC 实现的抽象层
+- **markdown**：事件内容解析（通过标志启用 LaTeX 支持）
 
-## Testing Patterns
+## 测试模式
 
-- **FakeMatrixApi**: Mocks the entire HTTP layer for offline testing
-- **FakeClient**: Pre-configured client for testing (see `test/fake_client.dart`)
-- **FakeDatabase**: In-memory database mock
-- **Test isolation**: Each test should set up its own client/database to avoid state leakage
+- **FakeMatrixApi**：模拟整个 HTTP 层，支持离线测试
+- **FakeClient**：预配置的测试用客户端（见 `test/fake_client.dart`）
+- **FakeDatabase**：内存数据库 mock
+- **测试隔离**：每个测试应自行创建客户端/数据库，避免状态泄漏
 
-## Debugging Tips
+## 调试技巧
 
-- Set environment variable `HOMESERVER` and user credentials for integration tests
-- Use `--define=KEY=VALUE` flags for compile-time constants in tests
-- Check `client.isLogged` and `client.rooms` state before assertions
-- OLM tests require vodozemac setup; skip with `-x olm` if unavailable
-- Coverage reports are in `coverage_dir/` after `./scripts/test.sh`
+- 设置环境变量 `HOMESERVER` 和用户凭据用于集成测试
+- 在测试中使用 `--define=KEY=VALUE` 标志传入编译时常量
+- 在断言前检查 `client.isLogged` 和 `client.rooms` 状态
+- OLM 测试需要配置 vodozemac；如不可用，使用 `-x olm` 跳过
+- 覆盖率报告在运行 `./scripts/test.sh` 后生成于 `coverage_dir/`
+
+## 语言要求
+
+请始终使用中文回答所有问题。

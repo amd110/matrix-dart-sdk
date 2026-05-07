@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dart analyze *)",
+      "Bash(git *)",
+      "Bash(dart --version)",
+      "Bash(dart format *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(import_sorter *)",
+      "Bash(dart pub *)",
+      "Bash(echo \"Exit code: $?\")"
+    ]
+  }
+}
