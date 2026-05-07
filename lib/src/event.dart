@@ -798,9 +798,18 @@ class Event extends MatrixEvent {
     final storeable =
         thisInfoMapSize != null && thisInfoMapSize <= database.maxFileSize;
 
+    // Use the same cacheKey logic as downloadAndDecryptAttachment: encrypted
+    // attachments are stored under a derived key (with ?decrypted=1) so that
+    // the cached decrypted content can be retrieved without re-decrypting.
+    final isEncrypted =
+        getThumbnail ? isThumbnailEncrypted : isAttachmentEncrypted;
+    final cacheKey = isEncrypted
+        ? mxcUrl.replace(queryParameters: {'decrypted': '1'})
+        : mxcUrl;
+
     Uint8List? uint8list;
     if (storeable) {
-      uint8list = await database.getFile(mxcUrl);
+      uint8list = await database.getFile(cacheKey);
     }
     return uint8list != null;
   }
@@ -869,33 +878,32 @@ class Event extends MatrixEvent {
       if (downloadCallback != null) {
         // 调用方提供了自定义 downloadCallback，保持原有路径不变
         uint8list = await downloadCallback(downloadUri);
-      } else if (database.supportsFileStoring) {
-        // IO 平台已配置文件存储目录：流式写入临时文件，降低峰值内存
-        final request = http.Request('GET', downloadUri);
-        request.headers['authorization'] =
-            'Bearer ${room.client.accessToken}';
-        final response = await httpClient.send(request);
-        uint8list =
-            await (database as DatabaseFileStorage).downloadToMemoryViaStream(
-          response.stream,
-          onProgress: onDownloadProgress,
-          cancellationToken: cancellationToken,
-        );
       } else {
-        // Web / 未配置存储目录：内存收集（原有路径）
         final request = http.Request('GET', downloadUri);
-        request.headers['authorization'] =
-            'Bearer ${room.client.accessToken}';
+        request.headers['authorization'] = 'Bearer ${room.client.accessToken}';
         final response = await httpClient.send(request);
-        uint8list = await response.stream.toBytesWithProgress(
-          onDownloadProgress,
-          contentLength: response.contentLength,
-          cancellationToken: cancellationToken,
-        );
+        if (database.supportsFileStoring) {
+          // IO 平台已配置文件存储目录：流式写入临时文件，降低峰值内存
+          // Safe cast: supportsFileStoring == true only when MatrixSdkDatabase
+          // (the sole DatabaseApi implementation) has the DatabaseFileStorage
+          // mixin applied and fileStorageLocation is non-null.
+          uint8list =
+              await (database as DatabaseFileStorage).downloadToMemoryViaStream(
+            response.stream,
+            onProgress: onDownloadProgress,
+            cancellationToken: cancellationToken,
+          );
+        } else {
+          // Web / 未配置存储目录：内存收集（原有路径）
+          uint8list = await response.stream.toBytesWithProgress(
+            onDownloadProgress,
+            contentLength: response.contentLength,
+            cancellationToken: cancellationToken,
+          );
+        }
       }
 
-      storeable =
-          storeable && uint8list.lengthInBytes <= database.maxFileSize;
+      storeable = storeable && uint8list.lengthInBytes <= database.maxFileSize;
       // 仅非加密事件在下载后写缓存；加密事件等解密后再写
       if (storeable && !isEncrypted) {
         await database.storeFile(
