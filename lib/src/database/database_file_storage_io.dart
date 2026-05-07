@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:path/path.dart';
+import 'package:random_string/random_string.dart';
 
 import 'package:matrix/matrix.dart';
 
@@ -58,6 +59,9 @@ mixin DatabaseFileStorage {
     return true;
   }
 
+  /// Downloads [stream] to memory, buffering through a temporary file when
+  /// [fileStorageLocation] is available to reduce peak heap usage.
+  /// Falls back to direct in-memory collection when file storage is disabled.
   Future<Uint8List> downloadToMemoryViaStream(
     Stream<List<int>> stream, {
     void Function(int)? onProgress,
@@ -70,8 +74,7 @@ mixin DatabaseFileStorage {
       var received = 0;
       await for (final chunk in stream) {
         cancellationToken?.throwIfCancelled();
-        final bytes =
-            chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
+        final bytes = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
         chunks.add(bytes);
         received += bytes.length;
         onProgress?.call(received);
@@ -87,21 +90,18 @@ mixin DatabaseFileStorage {
       return result;
     }
 
+    // Use timestamp + random suffix to avoid naming collisions on concurrent downloads.
     final tmpFile = File(
       join(
         Directory.fromUri(fileStorageLocation).path,
-        '${DateTime.now().microsecondsSinceEpoch}.tmp',
+        '${DateTime.now().millisecondsSinceEpoch}${randomAlphaNumeric(16)}.tmp',
       ),
     );
     final sink = tmpFile.openWrite();
     try {
       var received = 0;
       await for (final chunk in stream) {
-        if (cancellationToken?.isCancelled == true) {
-          await sink.close();
-          await tmpFile.delete();
-          throw const DownloadCancelledException();
-        }
+        cancellationToken?.throwIfCancelled();
         sink.add(chunk);
         received += chunk.length;
         onProgress?.call(received);
@@ -109,6 +109,8 @@ mixin DatabaseFileStorage {
       await sink.close();
       return await tmpFile.readAsBytes();
     } finally {
+      // Always clean up the temporary buffer file — even on the success path
+      // the data has already been read into memory via readAsBytes() above.
       await sink.close().catchError((_) {});
       if (await tmpFile.exists()) await tmpFile.delete();
     }
