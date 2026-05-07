@@ -865,6 +865,17 @@ class Event extends MatrixEvent {
     Uint8List? uint8list;
     if (storeable) {
       uint8list = await database.getFile(cacheKey);
+      // 缓存命中（包括已解密的加密附件或已缓存的非加密附件）
+      if (uint8list != null) {
+        final filename = content.tryGet<String>('filename') ?? body;
+        return MatrixFile(
+          bytes: uint8list,
+          name: getThumbnail
+              ? '$filename.thumbnail.${extensionFromMime(attachmentMimetype)}'
+              : filename,
+          mimeType: attachmentMimetype,
+        );
+      }
     }
 
     // 下载文件
