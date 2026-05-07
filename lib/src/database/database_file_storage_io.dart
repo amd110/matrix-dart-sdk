@@ -58,6 +58,62 @@ mixin DatabaseFileStorage {
     return true;
   }
 
+  Future<Uint8List> downloadToMemoryViaStream(
+    Stream<List<int>> stream, {
+    void Function(int)? onProgress,
+    CancellationToken? cancellationToken,
+  }) async {
+    final fileStorageLocation = this.fileStorageLocation;
+    if (!supportsFileStoring || fileStorageLocation == null) {
+      // 降级：内存收集（与 toBytesWithProgress 等效）
+      final chunks = <Uint8List>[];
+      var received = 0;
+      await for (final chunk in stream) {
+        cancellationToken?.throwIfCancelled();
+        final bytes =
+            chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
+        chunks.add(bytes);
+        received += bytes.length;
+        onProgress?.call(received);
+      }
+      if (chunks.isEmpty) return Uint8List(0);
+      if (chunks.length == 1) return chunks.first;
+      final result = Uint8List(received);
+      var offset = 0;
+      for (final c in chunks) {
+        result.setRange(offset, offset + c.length, c);
+        offset += c.length;
+      }
+      return result;
+    }
+
+    final tmpFile = File(
+      join(
+        Directory.fromUri(fileStorageLocation).path,
+        '${DateTime.now().microsecondsSinceEpoch}.tmp',
+      ),
+    );
+    final sink = tmpFile.openWrite();
+    try {
+      var received = 0;
+      await for (final chunk in stream) {
+        if (cancellationToken?.isCancelled == true) {
+          await sink.close();
+          await tmpFile.delete();
+          throw const DownloadCancelledException();
+        }
+        sink.add(chunk);
+        received += chunk.length;
+        onProgress?.call(received);
+      }
+      await sink.close();
+      return await tmpFile.readAsBytes();
+    } finally {
+      await sink.close().catchError((_) {});
+      if (await tmpFile.exists()) await tmpFile.delete();
+    }
+  }
+
   Future<void> deleteOldFiles(int savedAt) async {
     final dirUri = fileStorageLocation;
     final deleteFilesAfterDuration = this.deleteFilesAfterDuration;
