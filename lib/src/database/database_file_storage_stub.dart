@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:matrix/matrix.dart';
+
 mixin DatabaseFileStorage {
   bool get supportsFileStoring => false;
 
@@ -24,4 +26,14 @@ mixin DatabaseFileStorage {
   Future<bool> deleteFile(Uri mxcUri) async {
     return _cache.remove(mxcUri) != null;
   }
+
+  /// Stub: never called because [supportsFileStoring] is always false on web.
+  Future<Uint8List> downloadToMemoryViaStream(
+    Stream<List<int>> stream, {
+    void Function(int)? onProgress,
+    CancellationToken? cancellationToken,
+  }) =>
+      throw UnsupportedError(
+        'downloadToMemoryViaStream is not supported on web/stub platform.',
+      );
 }

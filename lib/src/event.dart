@@ -26,6 +26,8 @@ import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 
 import 'package:matrix/matrix.dart';
+import 'package:matrix/src/database/database_file_storage_stub.dart'
+    if (dart.library.io) 'package:matrix/src/database/database_file_storage_io.dart';
 import 'package:matrix/src/utils/file_send_request_credentials.dart';
 import 'package:matrix/src/utils/html_to_text.dart';
 import 'package:matrix/src/utils/markdown.dart';
@@ -840,6 +842,11 @@ class Event extends MatrixEvent {
       throw ('Encryption is not enabled in your Client.');
     }
 
+    // 加密附件使用派生 key 缓存解密内容，避免将加密原文和解密内容混存
+    final cacheKey = isEncrypted
+        ? mxcUrl.replace(queryParameters: {'decrypted': '1'})
+        : mxcUrl;
+
     // Is this file storeable?
     final thisInfoMap = getThumbnail ? thumbnailInfoMap : infoMap;
     final thisInfoMapSize = thisInfoMap.tryGet<int>('size');
@@ -848,7 +855,7 @@ class Event extends MatrixEvent {
 
     Uint8List? uint8list;
     if (storeable) {
-      uint8list = await room.client.database.getFile(mxcUrl);
+      uint8list = await database.getFile(cacheKey);
     }
 
     // 下载文件
@@ -857,22 +864,40 @@ class Event extends MatrixEvent {
       // 下载开始前检查取消标志，避免发起无效请求
       cancellationToken?.throwIfCancelled();
       final httpClient = room.client.httpClient;
-      downloadCallback ??= (Uri url) async {
-        final request = http.Request('GET', url);
-        request.headers['authorization'] = 'Bearer ${room.client.accessToken}';
+      final downloadUri = await mxcUrl.getDownloadUri(room.client);
 
+      if (downloadCallback != null) {
+        // 调用方提供了自定义 downloadCallback，保持原有路径不变
+        uint8list = await downloadCallback(downloadUri);
+      } else if (database.supportsFileStoring) {
+        // IO 平台已配置文件存储目录：流式写入临时文件，降低峰值内存
+        final request = http.Request('GET', downloadUri);
+        request.headers['authorization'] =
+            'Bearer ${room.client.accessToken}';
         final response = await httpClient.send(request);
-
-        return await response.stream.toBytesWithProgress(
+        uint8list =
+            await (database as DatabaseFileStorage).downloadToMemoryViaStream(
+          response.stream,
+          onProgress: onDownloadProgress,
+          cancellationToken: cancellationToken,
+        );
+      } else {
+        // Web / 未配置存储目录：内存收集（原有路径）
+        final request = http.Request('GET', downloadUri);
+        request.headers['authorization'] =
+            'Bearer ${room.client.accessToken}';
+        final response = await httpClient.send(request);
+        uint8list = await response.stream.toBytesWithProgress(
           onDownloadProgress,
           contentLength: response.contentLength,
           cancellationToken: cancellationToken,
         );
-      };
-      uint8list =
-          await downloadCallback(await mxcUrl.getDownloadUri(room.client));
-      storeable = storeable && uint8list.lengthInBytes < database.maxFileSize;
-      if (storeable) {
+      }
+
+      storeable =
+          storeable && uint8list.lengthInBytes <= database.maxFileSize;
+      // 仅非加密事件在下载后写缓存；加密事件等解密后再写
+      if (storeable && !isEncrypted) {
         await database.storeFile(
           mxcUrl,
           uint8list,
@@ -909,6 +934,14 @@ class Event extends MatrixEvent {
           await room.client.nativeImplementations.decryptFile(encryptedFile);
       if (uint8list == null) {
         throw ('Unable to decrypt file');
+      }
+      // 将解密后的内容写入缓存，后续调用可跳过下载和解密
+      if (storeable) {
+        await database.storeFile(
+          cacheKey,
+          uint8list,
+          DateTime.now().millisecondsSinceEpoch,
+        );
       }
     }
 
