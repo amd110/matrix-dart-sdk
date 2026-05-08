@@ -21,7 +21,7 @@ import 'dart:convert';
 import 'package:async/async.dart';
 import 'package:canonical_json/canonical_json.dart';
 import 'package:collection/collection.dart';
-import 'package:vodozemac/vodozemac.dart' as vod;
+import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
 
 import 'package:matrix/encryption/encryption.dart';
 import 'package:matrix/encryption/utils/json_signature_check_extension.dart';

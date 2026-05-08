@@ -39,7 +39,7 @@ void main() {
       );
 
       final encryptedFile = await file.encrypt();
-      expect(encryptedFile.data.isNotEmpty, true);
+      expect(encryptedFile.data?.isNotEmpty, true);
     });
 
     test('Shrink', () async {

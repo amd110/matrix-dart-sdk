@@ -1,6 +1,6 @@
 # 流式下载与解密文件缓存 实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 让 `downloadAndDecryptAttachment` 在 IO 平台下载时流式写入临时文件以降低峰值内存，并将解密后的内容缓存到数据库，后续调用可跳过下载和解密。
 
@@ -25,11 +25,11 @@
 **Files:**
 - Modify: `lib/src/database/database_file_storage_io.dart`
 
-- [ ] **Step 1：确认现有 mixin 结构**
+- [x] **Step 1：确认现有 mixin 结构**
 
   阅读 `lib/src/database/database_file_storage_io.dart`，确认 mixin 名称为 `DatabaseFileStorage`，已有字段 `fileStorageLocation`（`Uri?`）和 `supportsFileStoring`（`bool`）。
 
-- [ ] **Step 2：新增 `downloadToMemoryViaStream` 方法**
+- [x] **Step 2：新增 `downloadToMemoryViaStream` 方法**
 
   在 `deleteOldFiles` 方法之前（文件末尾 `}` 之前）插入以下方法：
 
@@ -93,7 +93,7 @@
 
   注意：`join` 已从 `package:path/path.dart` 导入（文件顶部已有 `import 'package:path/path.dart';`）。`DownloadCancelledException` 已在 `package:matrix/matrix.dart` 中导出，无需额外导入。
 
-- [ ] **Step 3：运行静态分析确认无报错**
+- [x] **Step 3：运行静态分析确认无报错**
 
   ```bash
   dart analyze lib/src/database/database_file_storage_io.dart
@@ -101,7 +101,7 @@
 
   期望输出：`No issues found!`
 
-- [ ] **Step 4：提交**
+- [x] **Step 4：提交**
 
   ```bash
   git add lib/src/database/database_file_storage_io.dart
@@ -115,7 +115,7 @@
 **Files:**
 - Modify: `lib/src/event.dart:812-925`
 
-- [ ] **Step 1：理解现有代码结构**
+- [x] **Step 1：理解现有代码结构**
 
   阅读 `lib/src/event.dart` 第 812–925 行，确认：
   - 第 851 行：`uint8list = await room.client.database.getFile(mxcUrl);`（读缓存用 `mxcUrl`）
@@ -123,7 +123,7 @@
   - 第 875–881 行：`storeFile(mxcUrl, uint8list, ...)`（写缓存用 `mxcUrl`）
   - 第 888–913 行：解密逻辑（解密后不写缓存）
 
-- [ ] **Step 2：替换 `downloadAndDecryptAttachment` 方法体**
+- [x] **Step 2：替换 `downloadAndDecryptAttachment` 方法体**
 
   将 `lib/src/event.dart` 第 823–925 行替换为：
 
@@ -270,7 +270,7 @@
 
   > **注意**：`DatabaseFileStorage` mixin 在 IO 平台由 `database_file_storage_io.dart` 提供，`event.dart` 需要通过 conditional import 引用，或直接用 `as DatabaseFileStorage` 转型（因 `MatrixSdkDatabase` 已混入该 mixin，`database.supportsFileStoring == true` 时转型安全）。
 
-- [ ] **Step 3：运行静态分析**
+- [x] **Step 3：运行静态分析**
 
   ```bash
   dart analyze lib/src/event.dart
@@ -278,7 +278,7 @@
 
   期望输出：`No issues found!`
 
-- [ ] **Step 4：提交**
+- [x] **Step 4：提交**
 
   ```bash
   git add lib/src/event.dart
@@ -292,11 +292,11 @@
 **Files:**
 - Modify: `test/event_test.dart`
 
-- [ ] **Step 1：定位插入位置**
+- [x] **Step 1：定位插入位置**
 
   在 `test/event_test.dart` 中找到 `test('downloadAndDecryptAttachment store', tags: 'olm'` 测试（约第 2525 行），在其**之后**新增以下测试。
 
-- [ ] **Step 2：新增加密附件解密缓存测试**
+- [x] **Step 2：新增加密附件解密缓存测试**
 
   在 `downloadAndDecryptAttachment store` 测试后插入：
 
@@ -364,7 +364,7 @@
   });
   ```
 
-- [ ] **Step 3：运行新测试（需要 OLM 环境）**
+- [x] **Step 3：运行新测试（需要 OLM 环境）**
 
   ```bash
   dart test test/event_test.dart -t olm -N "downloadAndDecryptAttachment caches decrypted content" --concurrency=1
@@ -380,7 +380,7 @@
 
   期望输出：所有非 OLM 测试通过，无新失败。
 
-- [ ] **Step 4：运行完整 event 测试套件**
+- [x] **Step 4：运行完整 event 测试套件**
 
   ```bash
   dart test test/event_test.dart -x olm --concurrency=$(getconf _NPROCESSORS_ONLN)
@@ -388,7 +388,7 @@
 
   期望输出：`All tests passed!`（OLM 测试跳过不计入）
 
-- [ ] **Step 5：提交**
+- [x] **Step 5：提交**
 
   ```bash
   git add test/event_test.dart
@@ -401,13 +401,13 @@
 
 **Files:** 无新增文件
 
-- [ ] **Step 1：格式化代码**
+- [x] **Step 1：格式化代码**
 
   ```bash
   dart format lib/src/database/database_file_storage_io.dart lib/src/event.dart test/event_test.dart
   ```
 
-- [ ] **Step 2：全量静态分析**
+- [x] **Step 2：全量静态分析**
 
   ```bash
   dart analyze
@@ -415,7 +415,7 @@
 
   期望输出：`No issues found!`
 
-- [ ] **Step 3：运行全量测试（跳过 OLM）**
+- [x] **Step 3：运行全量测试（跳过 OLM）**
 
   ```bash
   dart test --concurrency=$(getconf _NPROCESSORS_ONLN) test -x olm
@@ -423,7 +423,7 @@
 
   期望输出：`All tests passed!`
 
-- [ ] **Step 4：（可选）运行 OLM 测试**
+- [x] **Step 4：（可选）运行 OLM 测试**
 
   如有 vodozemac 环境：
 
@@ -433,7 +433,7 @@
 
   期望输出：`All tests passed!`
 
-- [ ] **Step 5：提交格式化（如有变更）**
+- [x] **Step 5：提交格式化（如有变更）**
 
   ```bash
   git add -u

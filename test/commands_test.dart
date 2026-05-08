@@ -20,7 +20,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:test/test.dart';
-import 'package:vodozemac/vodozemac.dart' as vod;
+import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
 
 import 'package:matrix/matrix.dart';
 import 'fake_client.dart';

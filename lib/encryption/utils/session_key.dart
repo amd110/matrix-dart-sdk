@@ -18,7 +18,7 @@
 
 import 'dart:convert';
 
-import 'package:vodozemac/vodozemac.dart' as vod;
+import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
 
 import 'package:matrix/encryption/utils/pickle_key.dart';
 import 'package:matrix/encryption/utils/stored_inbound_group_session.dart';

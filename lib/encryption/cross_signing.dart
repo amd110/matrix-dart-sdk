@@ -19,7 +19,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:vodozemac/vodozemac.dart' as vod;
+import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
 
 import 'package:matrix/encryption/encryption.dart';
 import 'package:matrix/encryption/ssss.dart';

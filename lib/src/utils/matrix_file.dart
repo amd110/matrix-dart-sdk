@@ -20,6 +20,7 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:blurhash_dart/blurhash_dart.dart';
@@ -29,24 +30,49 @@ import 'package:mime/mime.dart';
 import 'package:matrix/matrix.dart';
 
 class MatrixFile {
-  final Uint8List bytes;
+  final Uint8List? _bytes;
+  Uint8List get bytes => _bytes ?? Uint8List(0);
   final String name;
   final String mimeType;
+  final String? path;
+  final Stream<List<int>>? _stream;
 
   /// Encrypts this file and returns the
   /// encryption information as an [EncryptedFile].
   Future<EncryptedFile> encrypt({
     NativeImplementations nativeImplementations = NativeImplementations.dummy,
   }) async {
+    if (path != null || _stream != null) {
+      return await nativeImplementations.encryptFileStream(
+        getStream(),
+        size: size,
+      );
+    }
     return await nativeImplementations.encryptFile(bytes);
   }
 
-  MatrixFile({required this.bytes, required String name, String? mimeType})
-      : mimeType = mimeType != null && mimeType.isNotEmpty
+  MatrixFile({
+    Uint8List? bytes,
+    required String name,
+    String? mimeType,
+    this.path,
+    Stream<List<int>>? stream,
+  })  : _bytes = bytes,
+        _stream = stream,
+        mimeType = mimeType != null && mimeType.isNotEmpty
             ? mimeType
             : lookupMimeType(name, headerBytes: bytes) ??
                 'application/octet-stream',
         name = name.split('/').last;
+
+  Stream<List<int>> getStream() {
+    if (_stream != null) return _stream;
+    final path = this.path;
+    if (path != null) {
+      return File(path).openRead();
+    }
+    return Stream.value(bytes);
+  }
 
   /// derivatives the MIME type from the [bytes] and correspondingly creates a
   /// [MatrixFile], [MatrixImageFile], [MatrixAudioFile] or a [MatrixVideoFile]
@@ -54,6 +80,8 @@ class MatrixFile {
     required Uint8List bytes,
     required String name,
     String? mimeType,
+    String? path,
+    Stream<List<int>>? stream,
   }) {
     final msgType = msgTypeFromMime(
       mimeType ??
@@ -61,18 +89,48 @@ class MatrixFile {
           'application/octet-stream',
     );
     if (msgType == MessageTypes.Image) {
-      return MatrixImageFile(bytes: bytes, name: name, mimeType: mimeType);
+      return MatrixImageFile(
+        bytes: bytes,
+        name: name,
+        mimeType: mimeType,
+        path: path,
+        stream: stream,
+      );
     }
     if (msgType == MessageTypes.Video) {
-      return MatrixVideoFile(bytes: bytes, name: name, mimeType: mimeType);
+      return MatrixVideoFile(
+        bytes: bytes,
+        name: name,
+        mimeType: mimeType,
+        path: path,
+        stream: stream,
+      );
     }
     if (msgType == MessageTypes.Audio) {
-      return MatrixAudioFile(bytes: bytes, name: name, mimeType: mimeType);
+      return MatrixAudioFile(
+        bytes: bytes,
+        name: name,
+        mimeType: mimeType,
+        path: path,
+        stream: stream,
+      );
     }
-    return MatrixFile(bytes: bytes, name: name, mimeType: mimeType);
+    return MatrixFile(
+      bytes: bytes,
+      name: name,
+      mimeType: mimeType,
+      path: path,
+      stream: stream,
+    );
   }
 
-  int get size => bytes.length;
+  int get size {
+    final path = this.path;
+    if (path != null) {
+      return File(path).lengthSync();
+    }
+    return bytes.length;
+  }
 
   String get msgType {
     return msgTypeFromMime(mimeType);
@@ -99,9 +157,11 @@ class MatrixFile {
 
 class MatrixImageFile extends MatrixFile {
   MatrixImageFile({
-    required super.bytes,
+    super.bytes,
     required super.name,
     super.mimeType,
+    super.path,
+    super.stream,
     int? width,
     int? height,
     this.blurhash,
@@ -225,7 +285,7 @@ class MatrixImageFile extends MatrixFile {
     return thumbnailFile;
   }
 
-  /// you would likely want to use [NativeImplementations] and
+  /// you would likely want to use [NativeImplementations] andMatrixFile
   /// [Client.nativeImplementations] instead
   static MatrixImageFileResizedResponse? calcMetadataImplementation(
     Uint8List bytes,
@@ -355,9 +415,11 @@ class MatrixVideoFile extends MatrixFile {
   final int? duration;
 
   MatrixVideoFile({
-    required super.bytes,
+    super.bytes,
     required super.name,
     super.mimeType,
+    super.path,
+    super.stream,
     this.width,
     this.height,
     this.duration,
@@ -379,9 +441,11 @@ class MatrixAudioFile extends MatrixFile {
   final int? duration;
 
   MatrixAudioFile({
-    required super.bytes,
+    super.bytes,
     required super.name,
     super.mimeType,
+    super.path,
+    super.stream,
     this.duration,
   });
 
@@ -397,6 +461,10 @@ class MatrixAudioFile extends MatrixFile {
 
 extension ToMatrixFile on EncryptedFile {
   MatrixFile toMatrixFile() {
-    return MatrixFile.fromMimeType(bytes: data, name: 'crypt');
+    return MatrixFile.fromMimeType(
+      bytes: data ?? Uint8List(0),
+      name: 'crypt',
+      stream: dataStream,
+    );
   }
 }

@@ -17,7 +17,7 @@
  */
 
 import 'package:test/test.dart';
-import 'package:vodozemac/vodozemac.dart' as vod;
+import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
 
 import 'package:matrix/encryption/ssss.dart';
 import 'package:matrix/encryption/utils/crypto_setup_extension.dart';

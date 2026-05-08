@@ -23,7 +23,7 @@ import 'dart:typed_data';
 
 import 'package:base58check/base58.dart';
 import 'package:collection/collection.dart';
-import 'package:vodozemac/vodozemac.dart';
+import 'package:vodozemac_plus/vodozemac_plus.dart';
 
 import 'package:matrix/encryption/encryption.dart';
 import 'package:matrix/encryption/utils/base64_unpadded.dart';

@@ -25,7 +25,7 @@ import 'package:canonical_json/canonical_json.dart';
 import 'package:collection/collection.dart';
 import 'package:path/path.dart' show join;
 import 'package:test/test.dart';
-import 'package:vodozemac/vodozemac.dart' as vod;
+import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
 
 import 'package:matrix/matrix.dart';
 import 'package:matrix/src/utils/client_init_exception.dart';

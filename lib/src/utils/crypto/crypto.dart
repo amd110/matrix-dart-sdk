@@ -19,9 +19,28 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:vodozemac_plus/vodozemac_plus.dart';
+
 Uint8List secureRandomBytes(int len) {
   final rng = Random.secure();
   final list = Uint8List(len);
   list.setAll(0, Iterable.generate(list.length, (i) => rng.nextInt(256)));
   return list;
+}
+
+Stream<List<int>> streamAesCtr({
+  required Stream<List<int>> input,
+  required Uint8List key,
+  required Uint8List iv,
+}) async* {
+  final cipher = Aes256Ctr(key: key, iv: iv);
+
+  try {
+    await for (final chunk in input) {
+      final chunkBytes = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
+      yield cipher.update(chunkBytes);
+    }
+  } finally {
+    cipher.finalize();
+  }
 }

@@ -20,7 +20,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:collection/collection.dart';
-import 'package:vodozemac/vodozemac.dart' as vod;
+import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
 
 import 'package:matrix/encryption/encryption.dart';
 import 'package:matrix/encryption/utils/base64_unpadded.dart';

@@ -26,7 +26,7 @@ import 'package:collection/collection.dart' show IterableExtension;
 import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 import 'package:random_string/random_string.dart';
-import 'package:vodozemac/vodozemac.dart' as vod;
+import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
 
 import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';

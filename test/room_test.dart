@@ -1513,7 +1513,7 @@ void main() {
         );
 
         expect(result, isA<EncryptedFile>());
-        expect(result.data.isNotEmpty, true);
+        expect(result.data?.isNotEmpty, true);
         expect(result.k.isNotEmpty, true);
         expect(result.iv.isNotEmpty, true);
         expect(result.sha256.isNotEmpty, true);
