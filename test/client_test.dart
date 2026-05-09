@@ -1163,7 +1163,7 @@ void main() {
           },
         };
         final signature =
-            account.sign(String.fromCharCodes(canonicalJson.encode(keyObj)));
+            account.sign(utf8.decode(canonicalJson.encode(keyObj)));
         keyObj['signatures'] = {
           userId: {
             'ed25519:$deviceId': signature.toBase64(),

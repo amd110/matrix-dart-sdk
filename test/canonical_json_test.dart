@@ -16,6 +16,8 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import 'dart:convert';
+
 import 'package:canonical_json/canonical_json.dart';
 import 'package:test/test.dart';
 
@@ -49,7 +51,7 @@ void main() {
       test(entry.key, () async {
         expect(
           entry.key,
-          String.fromCharCodes(canonicalJson.encode(entry.value)),
+          utf8.decode(canonicalJson.encode(entry.value)),
         );
       });
     }

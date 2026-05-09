@@ -403,7 +403,7 @@ class Bootstrap {
       String? sign(Map<String, dynamic> object) {
         final keyObj = vod.PkSigning.fromSecretKey(masterSigningKey);
         return keyObj
-            .sign(String.fromCharCodes(canonicalJson.encode(object)))
+            .sign(utf8.decode(canonicalJson.encode(object)))
             .toBase64();
       }
 

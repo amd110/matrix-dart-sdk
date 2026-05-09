@@ -16,6 +16,8 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import 'dart:convert';
+
 import 'package:canonical_json/canonical_json.dart';
 import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
 
@@ -35,7 +37,7 @@ extension JsonSignatureCheckExtension on Map<String, dynamic> {
     if (!signatures[userId].containsKey('ed25519:$deviceId')) return false;
     final String signature = signatures[userId]['ed25519:$deviceId'];
     final canonical = canonicalJson.encode(this);
-    final message = String.fromCharCodes(canonical);
+    final message = utf8.decode(canonical);
     var isValid = false;
     try {
       vod.Ed25519PublicKey.fromBase64(key).verify(

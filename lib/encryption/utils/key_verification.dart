@@ -1367,7 +1367,7 @@ class _KeyVerificationMethodSas extends _KeyVerificationMethod {
     };
     request.makePayload(payload);
     // We just store the canonical json in here for later verification
-    startCanonicalJson = String.fromCharCodes(canonicalJson.encode(payload));
+    startCanonicalJson = utf8.decode(canonicalJson.encode(payload));
     await request.send(EventTypes.KeyVerificationStart, payload);
   }
 
@@ -1407,7 +1407,7 @@ class _KeyVerificationMethodSas extends _KeyVerificationMethod {
       return false;
     }
     authenticationTypes = possibleAuthenticationTypes;
-    startCanonicalJson = String.fromCharCodes(canonicalJson.encode(payload));
+    startCanonicalJson = utf8.decode(canonicalJson.encode(payload));
     return true;
   }
 

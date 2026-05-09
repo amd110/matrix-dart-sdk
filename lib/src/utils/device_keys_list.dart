@@ -232,7 +232,7 @@ abstract class SignableKey extends MatrixSignableKey {
     // remove the keys not needed for signing
     data.remove('unsigned');
     data.remove('signatures');
-    return String.fromCharCodes(canonicalJson.encode(data));
+    return utf8.decode(canonicalJson.encode(data));
   }
 
   bool _verifySignature(
