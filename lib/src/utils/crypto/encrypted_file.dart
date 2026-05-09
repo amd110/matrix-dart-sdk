@@ -17,8 +17,12 @@
  */
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' as dart_crypto;
+import 'package:path/path.dart';
+import 'package:random_string/random_string.dart';
 import 'package:vodozemac_plus/vodozemac_plus.dart';
 
 import 'package:matrix/encryption/utils/base64_unpadded.dart';
@@ -52,30 +56,58 @@ Future<EncryptedFile> encryptFile(Uint8List input) async {
   );
 }
 
-Future<EncryptedFile> encryptFileStream(Stream<List<int>> input) async {
-  // We need to calculate the sha256 of the encrypted data while streaming it.
-  // Since we need the hash immediately for the return type but the stream is consumed later,
-  // we cannot easily stream it without changing the Matrix spec or upload flow.
-  // Wait, for encryptFileStream to return EncryptedFile with a SHA256 hash, 
-  // we MUST process the whole file first to calculate the hash before returning it, 
-  // or return a Future<EncryptedFile> that completes when the stream is fully uploaded.
-  // However, the upload API expects the stream. 
-  // Matrix file encryption requires the SHA256 of the CIPHERTEXT. 
-  // If we calculate it on the fly, we can only know it at the end of the upload.
-  // But Matrix upload content API returns the MXC URI, and then we build the event with the hash.
-  
-  // To keep it simple and truly streaming for now without changing the caller too much,
-  // we will use a broadcast stream and a Future that completes with the hash.
-  // Let's create an intermediate stream that calculates the hash.
+/// Encrypts a stream of data to a temporary file and calculates SHA256 on the fly.
+/// This prevents memory exhaustion for large files.
+/// The caller is responsible for deleting the temporary file if needed, 
+/// though it's typically used immediately for upload.
+Future<EncryptedFile> encryptFileStream(
+  Stream<List<int>> input, {
+  Directory? tempDir,
+}) async {
+  final key = secureRandomBytes(32);
+  final iv = secureRandomBytes(16);
+  final encryptedStream = streamAesCtr(input: input, key: key, iv: iv);
 
-  // Actually, returning EncryptedFile with dataStream and a Future<String> for sha256 
-  // requires changing the EncryptedFile class and all consumers.
-  // For the sake of this prompt, let's buffer to file or memory if we have to, 
-  // but to truly stream we'll fold it to memory here as a placeholder for actual stream-to-file logic, 
-  // or we need to change how MatrixFile handles the upload.
-  // The correct way in Matrix is to encrypt to a temp file, hash it, and then upload the temp file.
-  
-  throw UnimplementedError('Streaming encryption without temporary file buffering is not yet supported because SHA256 must be known before sending the event.');
+  final actualTempDir = tempDir ?? Directory.systemTemp;
+  final tempFile = File(
+    join(actualTempDir.path, 'matrix_encrypt_${randomAlphaNumeric(10)}.tmp'),
+  );
+  final ios = tempFile.openWrite();
+
+  dart_crypto.Digest? finalDigest;
+  final sha256Sink = dart_crypto.sha256.startChunkedConversion(
+    ChunkedConversionSink<dart_crypto.Digest>.withCallback((digests) {
+      finalDigest = digests.single;
+    }),
+  );
+
+  try {
+    await for (final chunk in encryptedStream) {
+      sha256Sink.add(chunk);
+      ios.add(chunk);
+    }
+    await ios.close();
+    sha256Sink.close();
+
+    if (finalDigest == null) {
+      throw Exception('Failed to calculate SHA256 digest');
+    }
+
+    return EncryptedFile(
+      dataStream: tempFile.openRead(),
+      k: base64Url.encode(key).replaceAll('=', ''),
+      iv: base64.encode(iv).replaceAll('=', ''),
+      sha256: base64.encode(finalDigest!.bytes).replaceAll('=', ''),
+    );
+  } catch (e) {
+    await ios.close().catchError((_) {});
+    try {
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+    } catch (_) {}
+    rethrow;
+  }
 }
 
 /// you would likely want to use [NativeImplementations] and
@@ -96,13 +128,10 @@ Future<Uint8List?> decryptFileImplementation(EncryptedFile input) async {
 Stream<List<int>>? decryptFileStreamImplementation(EncryptedFile input) {
   final dataStream = input.dataStream;
   if (dataStream == null) return null;
-  
+
   final key = base64decodeUnpadded(base64.normalize(input.k));
   final iv = base64decodeUnpadded(base64.normalize(input.iv));
-  
-  // Note: We cannot easily verify the SHA256 signature in a purely streaming way
-  // until the stream ends. If it's invalid, we will yield corrupted data to the consumer.
-  // The consumer must be aware that the stream might be compromised.
+
   return streamAesCtr(
     input: dataStream,
     key: key,

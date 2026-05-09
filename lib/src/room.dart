@@ -864,15 +864,15 @@ class Room {
     bool displayPendingEvent = true,
   }) async {
     txid ??= client.generateUniqueTransactionId();
-    await client.database.storeFile(
+    await client.database.storeFileStream(
       Uri(scheme: 'cache', host: 'file', path: txid),
-      file.bytes,
+      file.getStream(),
       DateTime.now().millisecondsSinceEpoch,
     );
     if (thumbnail != null) {
-      await client.database.storeFile(
+      await client.database.storeFileStream(
         Uri(scheme: 'cache', host: 'thumbnail', path: txid),
-        thumbnail.bytes,
+        thumbnail.getStream(),
         DateTime.now().millisecondsSinceEpoch,
       );
     }

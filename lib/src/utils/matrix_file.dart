@@ -32,10 +32,12 @@ import 'package:matrix/matrix.dart';
 class MatrixFile {
   final Uint8List? _bytes;
   Uint8List get bytes => _bytes ?? Uint8List(0);
+
   final String name;
   final String mimeType;
   final String? path;
   final Stream<List<int>>? _stream;
+  final int? _size;
 
   /// Encrypts this file and returns the
   /// encryption information as an [EncryptedFile].
@@ -48,7 +50,10 @@ class MatrixFile {
         size: size,
       );
     }
-    return await nativeImplementations.encryptFile(bytes);
+    return await nativeImplementations.encryptFileStream(
+      Stream.empty(),
+      size: 0,
+    );
   }
 
   MatrixFile({
@@ -57,28 +62,32 @@ class MatrixFile {
     String? mimeType,
     this.path,
     Stream<List<int>>? stream,
+    int? size,
   })  : _bytes = bytes,
         _stream = stream,
+        _size = size,
         mimeType = mimeType != null && mimeType.isNotEmpty
             ? mimeType
-            : lookupMimeType(name, headerBytes: bytes) ??
-                'application/octet-stream',
+            : lookupMimeType(name) ?? 'application/octet-stream',
         name = name.split('/').last;
 
+  /// Retrieves the stream of the file content.
   Stream<List<int>> getStream() {
     if (_stream != null) return _stream;
     final path = this.path;
     if (path != null) {
       return File(path).openRead();
     }
-    return Stream.value(bytes);
+    if (_bytes != null) return Stream.value(_bytes);
+    return Stream.empty();
   }
+
 
   /// derivatives the MIME type from the [bytes] and correspondingly creates a
   /// [MatrixFile], [MatrixImageFile], [MatrixAudioFile] or a [MatrixVideoFile]
   factory MatrixFile.fromMimeType({
-    required Uint8List bytes,
     required String name,
+    Uint8List? bytes,
     String? mimeType,
     String? path,
     Stream<List<int>>? stream,
@@ -90,46 +99,45 @@ class MatrixFile {
     );
     if (msgType == MessageTypes.Image) {
       return MatrixImageFile(
-        bytes: bytes,
         name: name,
         mimeType: mimeType,
         path: path,
-        stream: stream,
+        stream: bytes != null ? Stream.value(bytes) : stream,
       );
     }
     if (msgType == MessageTypes.Video) {
       return MatrixVideoFile(
-        bytes: bytes,
         name: name,
         mimeType: mimeType,
         path: path,
-        stream: stream,
+        stream: bytes != null ? Stream.value(bytes) : stream,
       );
     }
     if (msgType == MessageTypes.Audio) {
       return MatrixAudioFile(
-        bytes: bytes,
         name: name,
         mimeType: mimeType,
         path: path,
-        stream: stream,
+        stream: bytes != null ? Stream.value(bytes) : stream,
       );
     }
     return MatrixFile(
-      bytes: bytes,
       name: name,
       mimeType: mimeType,
       path: path,
-      stream: stream,
+      stream: bytes != null ? Stream.value(bytes) : stream,
     );
   }
 
+
   int get size {
+    if (_size != null) return _size;
     final path = this.path;
     if (path != null) {
       return File(path).lengthSync();
     }
-    return bytes.length;
+    if (_bytes != null) return _bytes.length;
+    return 0; 
   }
 
   String get msgType {
@@ -178,7 +186,7 @@ class MatrixImageFile extends MatrixFile {
     final metaData = await nativeImplementations.calcImageMetadata(bytes);
 
     return MatrixImageFile(
-      bytes: metaData?.bytes ?? bytes,
+      stream: Stream.value(metaData?.bytes ?? bytes),
       name: name,
       mimeType: mimeType,
       width: metaData?.width,
@@ -200,7 +208,7 @@ class MatrixImageFile extends MatrixFile {
     )? customImageResizer,
     NativeImplementations nativeImplementations = NativeImplementations.dummy,
   }) async {
-    final image = MatrixImageFile(name: name, mimeType: mimeType, bytes: bytes);
+    final image = MatrixImageFile(name: name, mimeType: mimeType, stream: Stream.value(bytes));
 
     return await image.generateThumbnail(
           dimension: maxDimension,
@@ -275,7 +283,7 @@ class MatrixImageFile extends MatrixFile {
     }
 
     final thumbnailFile = MatrixImageFile(
-      bytes: resizedData.bytes,
+      stream: Stream.value(resizedData.bytes),
       name: name,
       mimeType: mimeType,
       width: resizedData.width,

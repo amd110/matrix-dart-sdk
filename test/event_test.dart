@@ -19,12 +19,12 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:test/test.dart';
-import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
-
 import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix/src/models/timeline_chunk.dart';
+import 'package:test/test.dart';
+import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
+
 import 'fake_client.dart';
 import 'fake_database.dart';
 
@@ -450,8 +450,7 @@ void main() async {
       event = Event.fromJson(
         {
           'content': {
-            'avatar_url':
-                'mxc://pixelthefox.net/bmGuC44Eeb3BomfkZTP02DVnGaRp4dek',
+            'avatar_url': 'mxc://pixelthefox.net/bmGuC44Eeb3BomfkZTP02DVnGaRp4dek',
             'displayname': [
               [
                 [[]],
@@ -466,8 +465,7 @@ void main() async {
           'type': 'm.room.member',
           'unsigned': {
             'prev_content': {
-              'avatar_url':
-                  'mxc://pixelthefox.net/bmGuC44Eeb3BomfkZTP02DVnGaRp4dek',
+              'avatar_url': 'mxc://pixelthefox.net/bmGuC44Eeb3BomfkZTP02DVnGaRp4dek',
               'displayname': 1,
               'membership': 'join',
             },
@@ -478,8 +476,7 @@ void main() async {
           'user_id': '@nyaaori:pixelthefox.net',
           'replaces_state': '\$kcqn2k6kXQKOM45t_p8OA03PQRR3KB2N_PN4HUq1GiY',
           'prev_content': {
-            'avatar_url':
-                'mxc://pixelthefox.net/bmGuC44Eeb3BomfkZTP02DVnGaRp4dek',
+            'avatar_url': 'mxc://pixelthefox.net/bmGuC44Eeb3BomfkZTP02DVnGaRp4dek',
             'displayname': 1,
             'membership': 'join',
           },
@@ -1595,8 +1592,7 @@ void main() async {
                 if (isEdit) ...{
                   'm.new_content': {
                     if (editBody != null) 'body': editBody,
-                    if (editFormattedBody != null)
-                      'formatted_body': editFormattedBody,
+                    if (editFormattedBody != null) 'formatted_body': editFormattedBody,
                     if (editHtml) 'format': 'org.matrix.custom.html',
                   },
                   'm.relates_to': {
@@ -2024,8 +2020,7 @@ void main() async {
         expectation: 'body',
         plaintextBody: false,
         body: '> <@some:user.id> acb def\n\nbody',
-        formattedBody:
-            '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
+        formattedBody: '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
         html: true,
         isEdit: false,
         // strictly speaking there is no quote in edits, but we have to handle them anyway because of other clients doing it wrong
@@ -2038,8 +2033,7 @@ void main() async {
         expectation: 'body',
         plaintextBody: true,
         body: '> <@some:user.id> acb def\n\nbody',
-        formattedBody:
-            '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
+        formattedBody: '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
         html: false,
         isEdit: false,
         // strictly speaking there is no quote in edits, but we have to handle them anyway because of other clients doing it wrong
@@ -2065,8 +2059,7 @@ void main() async {
         expectation: '**formatted body**',
         plaintextBody: true,
         body: '> <@some:user.id> acb def\n\nbody',
-        formattedBody:
-            '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
+        formattedBody: '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
         html: true,
         isEdit: false,
         // strictly speaking there is no quote in edits, but we have to handle them anyway because of other clients doing it wrong
@@ -2079,8 +2072,7 @@ void main() async {
         expectation: 'edit body',
         plaintextBody: false,
         body: '> <@some:user.id> acb def\n\nbody',
-        formattedBody:
-            '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
+        formattedBody: '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
         html: true,
         isEdit: true,
         // strictly speaking there is no quote in edits, but we have to handle them anyway because of other clients doing it wrong
@@ -2093,8 +2085,7 @@ void main() async {
         expectation: 'edit body',
         plaintextBody: true,
         body: '> <@some:user.id> acb def\n\nbody',
-        formattedBody:
-            '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
+        formattedBody: '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
         html: true,
         isEdit: true,
         // strictly speaking there is no quote in edits, but we have to handle them anyway because of other clients doing it wrong
@@ -2107,8 +2098,7 @@ void main() async {
         expectation: '**edit formatted body**',
         plaintextBody: true,
         body: '> <@some:user.id> acb def\n\nbody',
-        formattedBody:
-            '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
+        formattedBody: '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
         html: true,
         isEdit: true,
         // strictly speaking there is no quote in edits, but we have to handle them anyway because of other clients doing it wrong
@@ -2285,9 +2275,7 @@ void main() async {
         },
         room,
       );
-      var buffer = await event.downloadAndDecryptAttachment(
-        downloadCallback: downloadCallback,
-      );
+      var buffer = await event.downloadAndDecryptAttachment();
       expect(buffer.bytes, FILE_BUFF);
       expect(
         event.attachmentOrThumbnailMxcUrl().toString(),
@@ -2364,14 +2352,11 @@ void main() async {
         'https://fakeserver.notexisting/_matrix/client/v1/media/download/example.org/file',
       );
 
-      buffer = await event.downloadAndDecryptAttachment(
-        downloadCallback: downloadCallback,
-      );
+      buffer = await event.downloadAndDecryptAttachment();
       expect(buffer.bytes, FILE_BUFF);
 
       buffer = await event.downloadAndDecryptAttachment(
         getThumbnail: true,
-        downloadCallback: downloadCallback,
       );
       expect(buffer.bytes, THUMBNAIL_BUFF);
     });
@@ -2379,24 +2364,18 @@ void main() async {
       'encrypted attachments',
       tags: 'olm',
       () async {
-        final FILE_BUFF_ENC =
-            Uint8List.fromList([0x3B, 0x6B, 0xB2, 0x8C, 0xAF]);
-        final FILE_BUFF_DEC =
-            Uint8List.fromList([0x74, 0x65, 0x73, 0x74, 0x0A]);
-        final THUMB_BUFF_ENC =
-            Uint8List.fromList([0x55, 0xD7, 0xEB, 0x72, 0x05, 0x13]);
-        final THUMB_BUFF_DEC =
-            Uint8List.fromList([0x74, 0x68, 0x75, 0x6D, 0x62, 0x0A]);
+        final FILE_BUFF_ENC = Uint8List.fromList([0x3B, 0x6B, 0xB2, 0x8C, 0xAF]);
+        final FILE_BUFF_DEC = Uint8List.fromList([0x74, 0x65, 0x73, 0x74, 0x0A]);
+        final THUMB_BUFF_ENC = Uint8List.fromList([0x55, 0xD7, 0xEB, 0x72, 0x05, 0x13]);
+        final THUMB_BUFF_DEC = Uint8List.fromList([0x74, 0x68, 0x75, 0x6D, 0x62, 0x0A]);
         Future<Uint8List> downloadCallback(Uri uri) async {
           return {
             '/_matrix/client/v1/media/download/example.com/file': FILE_BUFF_ENC,
-            '/_matrix/client/v1/media/download/example.com/thumb':
-                THUMB_BUFF_ENC,
+            '/_matrix/client/v1/media/download/example.com/thumb': THUMB_BUFF_ENC,
           }[uri.path]!;
         }
 
-        final room =
-            Room(id: '!localpart:server.abc', client: await getClient());
+        final room = Room(id: '!localpart:server.abc', client: await getClient());
         var event = Event.fromJson(
           {
             'type': EventTypes.Message,
@@ -2425,9 +2404,7 @@ void main() async {
           },
           room,
         );
-        var buffer = await event.downloadAndDecryptAttachment(
-          downloadCallback: downloadCallback,
-        );
+        var buffer = await event.downloadAndDecryptAttachment();
         expect(buffer.bytes, FILE_BUFF_DEC);
 
         event = Event.fromJson(
@@ -2484,14 +2461,11 @@ void main() async {
         expect(event.thumbnailMimetype, 'text/plain');
         expect(event.attachmentMxcUrl.toString(), 'mxc://example.com/file');
         expect(event.thumbnailMxcUrl.toString(), 'mxc://example.com/thumb');
-        buffer = await event.downloadAndDecryptAttachment(
-          downloadCallback: downloadCallback,
-        );
+        buffer = await event.downloadAndDecryptAttachment();
         expect(buffer.bytes, FILE_BUFF_DEC);
 
         buffer = await event.downloadAndDecryptAttachment(
           getThumbnail: true,
-          downloadCallback: downloadCallback,
         );
         expect(buffer.bytes, THUMB_BUFF_DEC);
 
@@ -2554,18 +2528,14 @@ void main() async {
         room,
       );
       expect(await event.isAttachmentInLocalStore(), false);
-      var buffer = await event.downloadAndDecryptAttachment(
-        downloadCallback: downloadCallback,
-      );
+      var buffer = await event.downloadAndDecryptAttachment();
       expect(
         await event.isAttachmentInLocalStore(),
         event.room.client.database.supportsFileStoring,
       );
       expect(buffer.bytes, FILE_BUFF);
       expect(serverHits, 1);
-      buffer = await event.downloadAndDecryptAttachment(
-        downloadCallback: downloadCallback,
-      );
+      buffer = await event.downloadAndDecryptAttachment();
       expect(buffer.bytes, FILE_BUFF);
       expect(
         serverHits,
@@ -2575,8 +2545,7 @@ void main() async {
       await room.client.dispose(closeDatabase: true);
     });
 
-    test('downloadAndDecryptAttachment caches decrypted content', tags: 'olm',
-        () async {
+    test('downloadAndDecryptAttachment caches decrypted content', tags: 'olm', () async {
       final FILE_BUFF_ENC = Uint8List.fromList([0x3B, 0x6B, 0xB2, 0x8C, 0xAF]);
       final FILE_BUFF_DEC = Uint8List.fromList([0x74, 0x65, 0x73, 0x74, 0x0A]);
       var serverHits = 0;
@@ -2617,16 +2586,12 @@ void main() async {
       );
 
       // 第一次：从服务器下载并解密
-      final buffer1 = await event.downloadAndDecryptAttachment(
-        downloadCallback: downloadCallback,
-      );
+      final buffer1 = await event.downloadAndDecryptAttachment();
       expect(buffer1.bytes, FILE_BUFF_DEC);
       expect(serverHits, 1);
 
       // 第二次：若数据库支持文件存储，应命中解密缓存，不再请求服务器
-      final buffer2 = await event.downloadAndDecryptAttachment(
-        downloadCallback: downloadCallback,
-      );
+      final buffer2 = await event.downloadAndDecryptAttachment();
       expect(buffer2.bytes, FILE_BUFF_DEC);
       expect(
         serverHits,
@@ -2669,9 +2634,7 @@ void main() async {
         room,
       );
 
-      var buffer = await event.downloadAndDecryptAttachment(
-        downloadCallback: downloadCallback,
-      );
+      var buffer = await event.downloadAndDecryptAttachment();
       expect(
         await event.isAttachmentInLocalStore(),
         event.room.client.database.supportsFileStoring,
@@ -2681,14 +2644,12 @@ void main() async {
 
       if (event.room.client.database.supportsFileStoring == true) {
         buffer = await event.downloadAndDecryptAttachment(
-          downloadCallback: downloadCallback,
           fromLocalStoreOnly: true,
         );
         expect(buffer.bytes, FILE_BUFF);
       } else {
         expect(
           () async => await event.downloadAndDecryptAttachment(
-            downloadCallback: downloadCallback,
             fromLocalStoreOnly: true,
           ),
           throwsA(anything),
@@ -2699,8 +2660,7 @@ void main() async {
       await room.client.dispose(closeDatabase: true);
     });
 
-    test('downloadAndDecryptAttachment store only without file', tags: 'olm',
-        () async {
+    test('downloadAndDecryptAttachment store only without file', tags: 'olm', () async {
       final FILE_BUFF = Uint8List.fromList([0]);
       var serverHits = 0;
       Future<Uint8List> downloadCallback(Uri uri) async {
@@ -2734,7 +2694,6 @@ void main() async {
 
       expect(
         () async => await event.downloadAndDecryptAttachment(
-          downloadCallback: downloadCallback,
           fromLocalStoreOnly: true,
         ),
         throwsA(anything),
@@ -2871,8 +2830,7 @@ void main() async {
             'msgtype': 'm.text',
             'body': '🦊 :blah:',
             'format': 'org.matrix.custom.html',
-            'formatted_body':
-                '🦊 <img data-mx-emoticon src="mxc://blah/blubb">',
+            'formatted_body': '🦊 <img data-mx-emoticon src="mxc://blah/blubb">',
           },
           'event_id': '\$edit2',
           'sender': '@alice:example.org',
@@ -3046,8 +3004,7 @@ void main() async {
         originServerTs: DateTime.now(),
         room: room,
       );
-      final timeline =
-          Timeline(room: room, chunk: TimelineChunk(events: [targetEvent]));
+      final timeline = Timeline(room: room, chunk: TimelineChunk(events: [targetEvent]));
       expect(await event.getReplyEvent(timeline), targetEvent);
     });
     test('getMentions', () {

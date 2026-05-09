@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:matrix/matrix.dart';
 
@@ -8,15 +8,10 @@ mixin DatabaseFileStorage {
   late final Uri? fileStorageLocation;
   late final Duration? deleteFilesAfterDuration;
 
-  final Map<Uri, Uint8List> _cache = {};
+  Future<void> storeFileStream(Uri mxcUri, Stream<List<int>> stream, int time) async {}
 
-  Future<void> storeFile(Uri mxcUri, Uint8List bytes, int time) async {
-    if (mxcUri.scheme != 'cache') return;
-    _cache[mxcUri] = bytes;
-  }
-
-  Future<Uint8List?> getFile(Uri mxcUri) async {
-    return _cache[mxcUri];
+  Future<Stream<List<int>>?> getFileStream(Uri mxcUri) async {
+    return null;
   }
 
   Future<void> deleteOldFiles(int savedAt) async {
@@ -24,16 +19,18 @@ mixin DatabaseFileStorage {
   }
 
   Future<bool> deleteFile(Uri mxcUri) async {
-    return _cache.remove(mxcUri) != null;
+    return false;
   }
 
   /// Stub: never called because [supportsFileStoring] is always false on web.
-  Future<Uint8List> downloadToMemoryViaStream(
-    Stream<List<int>> stream, {
+  Future<File> downloadToFileViaStream(
+    Stream<List<int>> stream,
+    Uri mxcUri, {
     void Function(int)? onProgress,
     CancellationToken? cancellationToken,
   }) =>
       throw UnsupportedError(
-        'downloadToMemoryViaStream is not supported on web/stub platform.',
+        'downloadToFileViaStream is not supported on web/stub platform.',
       );
 }
+

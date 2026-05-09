@@ -1624,9 +1624,9 @@ class Client extends MatrixApi {
 
     final database = this.database;
     if (file.length <= database.maxFileSize) {
-      await database.storeFile(
+      await database.storeFileStream(
         mxc,
-        file,
+        Stream.value(file),
         DateTime.now().millisecondsSinceEpoch,
       );
     }

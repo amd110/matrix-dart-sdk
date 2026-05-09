@@ -1,10 +1,8 @@
 import 'dart:io';
-import 'dart:typed_data';
-
-import 'package:path/path.dart';
-import 'package:random_string/random_string.dart';
 
 import 'package:matrix/matrix.dart';
+import 'package:path/path.dart';
+import 'package:random_string/random_string.dart';
 
 // ignore: unused-code
 mixin DatabaseFileStorage {
@@ -27,23 +25,38 @@ mixin DatabaseFileStorage {
     );
   }
 
-  Future<void> storeFile(Uri mxcUri, Uint8List bytes, int time) async {
+
+  Future<void> storeFileStream(Uri mxcUri, Stream<List<int>> stream, int time) async {
     final fileStorageLocation = this.fileStorageLocation;
     if (!supportsFileStoring || fileStorageLocation == null) return;
 
     final file = _getFileFromMxc(mxcUri);
-
     if (await file.exists()) return;
-    await file.writeAsBytes(bytes);
+
+    final sink = file.openWrite();
+    try {
+      await for (final chunk in stream) {
+        sink.add(chunk);
+      }
+      await sink.close();
+    } catch (e) {
+      try {
+        await sink.close();
+      } catch (_) {}
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+      rethrow;
+    }
   }
 
-  Future<Uint8List?> getFile(Uri mxcUri) async {
+  Future<Stream<List<int>>?> getFileStream(Uri mxcUri) async {
     final fileStorageLocation = this.fileStorageLocation;
     if (!supportsFileStoring || fileStorageLocation == null) return null;
 
     final file = _getFileFromMxc(mxcUri);
 
-    if (await file.exists()) return await file.readAsBytes();
+    if (await file.exists()) return file.openRead();
     return null;
   }
 
@@ -59,44 +72,35 @@ mixin DatabaseFileStorage {
     return true;
   }
 
-  /// Downloads [stream] to memory, buffering through a temporary file when
-  /// [fileStorageLocation] is available to reduce peak heap usage.
-  /// Falls back to direct in-memory collection when file storage is disabled.
-  Future<Uint8List> downloadToMemoryViaStream(
-    Stream<List<int>> stream, {
+
+  /// Downloads [stream] directly to a file, returning the [File] object.
+  /// Uses a temporary file during download to ensure the target file is only created upon completion.
+  /// Throws [UnsupportedError] if file storage is not supported or [fileStorageLocation] is null.
+  Future<File> downloadToFileViaStream(
+    Stream<List<int>> stream,
+    Uri mxcUri, {
     void Function(int)? onProgress,
     CancellationToken? cancellationToken,
   }) async {
     final fileStorageLocation = this.fileStorageLocation;
     if (!supportsFileStoring || fileStorageLocation == null) {
-      // 降级：内存收集（与 toBytesWithProgress 等效）
-      final chunks = <Uint8List>[];
-      var received = 0;
-      await for (final chunk in stream) {
-        cancellationToken?.throwIfCancelled();
-        final bytes = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
-        chunks.add(bytes);
-        received += bytes.length;
-        onProgress?.call(received);
-      }
-      if (chunks.isEmpty) return Uint8List(0);
-      if (chunks.length == 1) return chunks.first;
-      final result = Uint8List(received);
-      var offset = 0;
-      for (final c in chunks) {
-        result.setRange(offset, offset + c.length, c);
-        offset += c.length;
-      }
-      return result;
+      throw UnsupportedError('File storage is not supported or configured on this platform.');
     }
 
-    // Use timestamp + random suffix to avoid naming collisions on concurrent downloads.
+    final targetFile = _getFileFromMxc(mxcUri);
+    
+    // If the file already exists, we can return it immediately.
+    if (await targetFile.exists()) {
+       return targetFile;
+    }
+
     final tmpFile = File(
       join(
         Directory.fromUri(fileStorageLocation).path,
         '${DateTime.now().millisecondsSinceEpoch}${randomAlphaNumeric(16)}.tmp',
       ),
     );
+    
     final sink = tmpFile.openWrite();
     try {
       var received = 0;
@@ -107,12 +111,21 @@ mixin DatabaseFileStorage {
         onProgress?.call(received);
       }
       await sink.close();
-      return await tmpFile.readAsBytes();
-    } finally {
-      // Always clean up the temporary buffer file — even on the success path
-      // the data has already been read into memory via readAsBytes() above.
-      await sink.close().catchError((_) {});
-      if (await tmpFile.exists()) await tmpFile.delete();
+      
+      // Rename temporary file to the final target file.
+      // Rename is generally atomic on POSIX systems.
+      return await tmpFile.rename(targetFile.path);
+    } catch (e) {
+      // In case of error (including cancellation), clean up the temporary file.
+      try {
+        await sink.close();
+      } catch (_) {}
+      try {
+        if (await tmpFile.exists()) {
+          await tmpFile.delete();
+        }
+      } catch (_) {}
+      rethrow;
     }
   }
 

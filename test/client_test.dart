@@ -1541,7 +1541,7 @@ void main() {
       );
       expect(response.toString(), 'mxc://example.com/AQwafuaFswefuhsfAFAgsw');
       expect(
-        await client.database.getFile(response) != null,
+        await client.database.getFileStream(response) != null,
         client.database.supportsFileStoring,
       );
       await client.dispose(closeDatabase: true);
