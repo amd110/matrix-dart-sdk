@@ -44,6 +44,7 @@ abstract class NativeImplementations {
 
   FutureOr<Stream<List<int>>> decryptFileStream(
     EncryptedFile file, {
+    String? path,
     bool retryInDummy = true,
   });
 
@@ -55,6 +56,7 @@ abstract class NativeImplementations {
   FutureOr<EncryptedFile> encryptFileStream(
     Stream<List<int>> stream, {
     int? size,
+    String? path,
     bool retryInDummy = true,
   });
 
@@ -123,9 +125,10 @@ class NativeImplementationsDummy extends NativeImplementations {
   @override
   Future<Stream<List<int>>> decryptFileStream(
     EncryptedFile file, {
+    String? path,
     bool retryInDummy = true,
   }) async {
-    final stream = crypto_utils.decryptFileStreamImplementation(file);
+    final stream = crypto_utils.decryptFileStreamImplementation(file, path: path);
     if (stream == null) throw Exception('Unable to decrypt file stream');
     return stream;
   }
@@ -142,12 +145,10 @@ class NativeImplementationsDummy extends NativeImplementations {
   Future<EncryptedFile> encryptFileStream(
     Stream<List<int>> stream, {
     int? size,
+    String? path,
     bool retryInDummy = true,
   }) async {
-    final bytes = Uint8List.fromList(
-      await stream.fold<List<int>>([], (previous, element) => previous..addAll(element)),
-    );
-    return encryptFile(bytes);
+    return crypto_utils.encryptFileStream(stream, path: path);
   }
 
   @override
@@ -218,12 +219,10 @@ Future<void> _persistentIsolateMain(_NativeIsolateInitArgs args) async {
       final result = switch (message.method) {
         'decryptFile' =>
           await dummy.decryptFile(message.arg as EncryptedFile),
-        'decryptFileStream' =>
-          await dummy.decryptFileStream(message.arg as EncryptedFile),
         'encryptFile' =>
           await dummy.encryptFile(message.arg as Uint8List),
         'encryptFileStream' =>
-          await dummy.encryptFileStream(message.arg as Stream<List<int>>),
+          await dummy.encryptFileStream(Stream.empty(), path: message.arg as String),
         'generateUploadKeys' =>
           await dummy.generateUploadKeys(message.arg as GenerateUploadKeysArgs),
         'keyFromPassphrase' =>
@@ -309,16 +308,23 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
       _call('decryptFile', file);
 
   @override
-  Future<Stream<List<int>>> decryptFileStream(EncryptedFile file, {bool retryInDummy = true}) =>
-      _call('decryptFileStream', file);
+  Future<Stream<List<int>>> decryptFileStream(EncryptedFile file, {String? path, bool retryInDummy = true}) async {
+    await vodozemacInit?.call();
+    return NativeImplementations.dummy.decryptFileStream(file, path: path);
+  }
 
   @override
   Future<EncryptedFile> encryptFile(Uint8List bytes, {bool retryInDummy = true}) =>
       _call('encryptFile', bytes);
 
   @override
-  Future<EncryptedFile> encryptFileStream(Stream<List<int>> stream, {int? size, bool retryInDummy = true}) =>
-      _call('encryptFileStream', stream);
+  Future<EncryptedFile> encryptFileStream(Stream<List<int>> stream, {int? size, String? path, bool retryInDummy = true}) async {
+    if (path == null) {
+      await vodozemacInit?.call();
+      return NativeImplementations.dummy.encryptFileStream(stream, size: size);
+    }
+    return _call('encryptFileStream', path);
+  }
 
   @override
   Future<RoomKeys> generateUploadKeys(GenerateUploadKeysArgs args, {bool retryInDummy = true}) =>
@@ -383,15 +389,11 @@ class NativeImplementationsIsolate extends NativeImplementations {
   @override
   Future<Stream<List<int>>> decryptFileStream(
     EncryptedFile file, {
+    String? path,
     bool retryInDummy = true,
-  }) {
-    return runInBackground<Stream<List<int>>, EncryptedFile>(
-      (EncryptedFile args) async {
-        await vodozemacInit?.call();
-        return NativeImplementations.dummy.decryptFileStream(args);
-      },
-      file,
-    );
+  }) async {
+    await vodozemacInit?.call();
+    return NativeImplementations.dummy.decryptFileStream(file, path: path);
   }
 
   @override
@@ -407,21 +409,29 @@ class NativeImplementationsIsolate extends NativeImplementations {
       bytes,
     );
   }
-
-  @override
-  Future<EncryptedFile> encryptFileStream(
-    Stream<List<int>> stream, {
-    int? size,
-    bool retryInDummy = true,
-  }) {
-    return runInBackground<EncryptedFile, Stream<List<int>>>(
-      (Stream<List<int>> args) async {
-        await vodozemacInit?.call();
-        return NativeImplementations.dummy.encryptFileStream(args);
-      },
-      stream,
-    );
+@override
+Future<EncryptedFile> encryptFileStream(
+  Stream<List<int>> stream, {
+  int? size,
+  String? path,
+  bool retryInDummy = true,
+}) {
+  if (path == null) {
+    // If we don't have a path, we cannot send the stream to the isolate.
+    // We must run it locally on the main thread.
+    return NativeImplementations.dummy.encryptFileStream(stream, size: size);
   }
+
+  // We can safely send the path to the isolate
+  return runInBackground<EncryptedFile, String>(
+    (String isolatePath) async {
+      await vodozemacInit?.call();
+      // Run dummy implementation in isolate, ignoring the stream and using the path
+      return NativeImplementations.dummy.encryptFileStream(Stream.empty(), path: isolatePath);
+    },
+    path,
+  );
+}
 
   @override
   Future<RoomKeys> generateUploadKeys(

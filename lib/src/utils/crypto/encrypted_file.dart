@@ -32,12 +32,14 @@ class EncryptedFile {
   EncryptedFile({
     this.data,
     this.dataStream,
+    this.path,
     required this.k,
     required this.iv,
     required this.sha256,
   });
   Uint8List? data;
   Stream<List<int>>? dataStream;
+  String? path;
   String k;
   String iv;
   String sha256;
@@ -62,11 +64,17 @@ Future<EncryptedFile> encryptFile(Uint8List input) async {
 /// though it's typically used immediately for upload.
 Future<EncryptedFile> encryptFileStream(
   Stream<List<int>> input, {
+  String? path,
   Directory? tempDir,
 }) async {
   final key = secureRandomBytes(32);
   final iv = secureRandomBytes(16);
-  final encryptedStream = streamAesCtr(input: input, key: key, iv: iv);
+  
+  // If path is provided, we can read directly from it, ignoring the input stream
+  // This is crucial for isolate execution where streams cannot cross the boundary
+  final effectiveStream = path != null ? File(path).openRead() : input;
+  
+  final encryptedStream = streamAesCtr(input: effectiveStream, key: key, iv: iv);
 
   final actualTempDir = tempDir ?? Directory.systemTemp;
   final tempFile = File(
@@ -94,7 +102,7 @@ Future<EncryptedFile> encryptFileStream(
     }
 
     return EncryptedFile(
-      dataStream: tempFile.openRead(),
+      path: tempFile.path,
       k: base64Url.encode(key).replaceAll('=', ''),
       iv: base64.encode(iv).replaceAll('=', ''),
       sha256: base64.encode(finalDigest!.bytes).replaceAll('=', ''),
@@ -125,8 +133,9 @@ Future<Uint8List?> decryptFileImplementation(EncryptedFile input) async {
   return CryptoUtils.aesCtr(input: data, key: key, iv: iv);
 }
 
-Stream<List<int>>? decryptFileStreamImplementation(EncryptedFile input) {
-  final dataStream = input.dataStream;
+Stream<List<int>>? decryptFileStreamImplementation(EncryptedFile input, {String? path}) {
+  final targetPath = input.path ?? path;
+  final dataStream = targetPath != null ? File(targetPath).openRead() : input.dataStream;
   if (dataStream == null) return null;
 
   final key = base64decodeUnpadded(base64.normalize(input.k));
