@@ -10,7 +10,7 @@ mixin DatabaseFileStorage {
 
   Future<void> storeFileStream(Uri mxcUri, Stream<List<int>> stream, int time) async {}
 
-  Future<Stream<List<int>>?> getFileStream(Uri mxcUri) async {
+  Future<File?> getFile(Uri mxcUri) async {
     return null;
   }
 

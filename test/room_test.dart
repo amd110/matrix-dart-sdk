@@ -1461,7 +1461,7 @@ void main() {
       final resp = await room.sendFileEvent(testFile, txid: 'testtxid');
       expect(resp.toString(), '\$event12');
       expect(
-        await room.client.database.getFileStream(
+        await room.client.database.getFile(
           Uri(
             scheme: 'cache',
             host: 'file',
@@ -1484,7 +1484,7 @@ void main() {
       } catch (_) {}
 
       expect(
-        await room.client.database.getFileStream(
+        await room.client.database.getFile(
           Uri(
             scheme: 'cache',
             host: 'file',

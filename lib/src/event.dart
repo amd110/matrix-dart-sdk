@@ -433,16 +433,17 @@ class Event extends MatrixEvent {
     final filename = content.tryGet<String>('filename')!;
 
     if (getThumbnail) {
-      final thumbnailStream = await room.client.database.getFileStream(
+      final thumbnailFile = await room.client.database.getFile(
         Uri(
           scheme: 'cache',
           host: 'thumbnail',
           path: transactionId,
         ),
       );
-      if (thumbnailStream != null) {
+      if (thumbnailFile != null) {
         return MatrixImageFile(
-          stream: thumbnailStream,
+          stream: thumbnailFile.openRead(),
+          path: thumbnailFile.path,
           name: filename,
           mimeType: thumbnailMimetype,
           width: thumbnailInfoMap.tryGet<int>('w'),
@@ -451,17 +452,19 @@ class Event extends MatrixEvent {
       }
     }
 
-    final fileStream = await room.client.database.getFileStream(
+    final fileFile = await room.client.database.getFile(
       Uri(
         scheme: 'cache',
         host: 'file',
         path: transactionId,
       ),
     );
-    if (fileStream == null) {
+    if (fileFile == null) {
       await cancelSend();
       throw Exception('Can not try to send again. File is no longer cached.');
     }
+    
+    final fileStream = fileFile.openRead();
     return switch (messageType) {
       MessageTypes.Video => MatrixVideoFile(
           stream: fileStream,
@@ -780,7 +783,7 @@ class Event extends MatrixEvent {
     final cacheKey = isEncrypted ? mxcUrl.replace(queryParameters: {'decrypted': '1'}) : mxcUrl;
 
     if (storeable) {
-      return (await database.getFileStream(cacheKey)) != null;
+      return (await database.getFile(cacheKey)) != null;
     }
     return false;
   }
@@ -830,12 +833,13 @@ class Event extends MatrixEvent {
 
     Stream<List<int>>? dataStream;
     if (storeable) {
-      dataStream = await database.getFileStream(cacheKey);
+      final cachedFile = await database.getFile(cacheKey);
       // 缓存命中（包括已解密的加密附件或已缓存的非加密附件）
-      if (dataStream != null) {
+      if (cachedFile != null) {
+        dataStream = cachedFile.openRead();
         final filename = content.tryGet<String>('filename') ?? body;
         return MatrixFile(
-          stream: dataStream,
+          path: cachedFile.path,
           name: getThumbnail
               ? '$filename.thumbnail.${extensionFromMime(attachmentMimetype)}'
               : filename,
@@ -845,7 +849,7 @@ class Event extends MatrixEvent {
     }
     File? downloadedFile;
     // 下载文件
-    final canDownloadFileFromServer = dataStream == null && !fromLocalStoreOnly;
+    final canDownloadFileFromServer = !fromLocalStoreOnly;
     if (canDownloadFileFromServer) {
       // 下载开始前检查取消标志，避免发起无效请求
       cancellationToken?.throwIfCancelled();
@@ -867,7 +871,7 @@ class Event extends MatrixEvent {
       );
 
       dataStream = downloadedFile.openRead();
-    } else if (dataStream == null) {
+    } else {
       throw ('Unable to download file from local store.');
     }
 
@@ -901,7 +905,8 @@ class Event extends MatrixEvent {
           dataStream,
           DateTime.now().millisecondsSinceEpoch,
         );
-        dataStream = await database.getFileStream(cacheKey);
+        downloadedFile = await database.getFile(cacheKey);
+        dataStream = downloadedFile?.openRead();
       }
     }
 

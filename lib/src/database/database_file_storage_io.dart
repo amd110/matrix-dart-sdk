@@ -50,13 +50,13 @@ mixin DatabaseFileStorage {
     }
   }
 
-  Future<Stream<List<int>>?> getFileStream(Uri mxcUri) async {
+  Future<File?> getFile(Uri mxcUri) async {
     final fileStorageLocation = this.fileStorageLocation;
     if (!supportsFileStoring || fileStorageLocation == null) return null;
 
     final file = _getFileFromMxc(mxcUri);
 
-    if (await file.exists()) return file.openRead();
+    if (await file.exists()) return file;
     return null;
   }
 

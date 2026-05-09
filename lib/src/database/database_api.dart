@@ -16,6 +16,8 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import 'dart:io';
+
 import 'package:matrix/encryption/utils/olm_session.dart';
 import 'package:matrix/encryption/utils/outbound_group_session.dart';
 import 'package:matrix/encryption/utils/ssss_cache.dart';
@@ -126,7 +128,7 @@ abstract class DatabaseApi {
   /// also used for caching not-yet-sent files. Those are cached under an Uri
   /// with this format:
   /// `cache://file/<TRANSACTION_ID>` or `cache://thumbnail/<TRANSACTION_ID>`
-  Future<Stream<List<int>>?> getFileStream(Uri mxcUri);
+  Future<File?> getFile(Uri mxcUri);
 
   Future storeFileStream(Uri mxcUri, Stream<List<int>> stream, int time);
 

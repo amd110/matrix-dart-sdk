@@ -80,22 +80,22 @@ void main() {
           Stream.value(Uint8List.fromList([0])),
           0,
         );
-        final file = await database.getFileStream(Uri.parse('mxc://test'));
+        final file = await database.getFile(Uri.parse('mxc://test'));
         expect(file != null, database.supportsFileStoring);
 
         final result = await database.deleteFile(Uri.parse('mxc://test'));
         expect(result, database.supportsFileStoring);
         if (result) {
-          final file = await database.getFileStream(Uri.parse('mxc://test'));
+          final file = await database.getFile(Uri.parse('mxc://test'));
           expect(file, null);
         }
       });
-      test('getFileStream', () async {
-        await database.getFileStream(Uri.parse('mxc://test'));
+      test('getFile', () async {
+        await database.getFile(Uri.parse('mxc://test'));
       });
       test('deleteOldFiles', () async {
         await database.deleteOldFiles(1);
-        final file = await database.getFileStream(Uri.parse('mxc://test'));
+        final file = await database.getFile(Uri.parse('mxc://test'));
         expect(file == null, true);
       });
       test('storeRoomUpdate', () async {

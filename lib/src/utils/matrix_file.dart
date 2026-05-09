@@ -99,33 +99,37 @@ class MatrixFile {
     );
     if (msgType == MessageTypes.Image) {
       return MatrixImageFile(
+        bytes: bytes,
         name: name,
         mimeType: mimeType,
         path: path,
-        stream: bytes != null ? Stream.value(bytes) : stream,
+        stream: stream,
       );
     }
     if (msgType == MessageTypes.Video) {
       return MatrixVideoFile(
+        bytes: bytes,
         name: name,
         mimeType: mimeType,
         path: path,
-        stream: bytes != null ? Stream.value(bytes) : stream,
+        stream: stream,
       );
     }
     if (msgType == MessageTypes.Audio) {
       return MatrixAudioFile(
+        bytes: bytes,
         name: name,
         mimeType: mimeType,
         path: path,
-        stream: bytes != null ? Stream.value(bytes) : stream,
+        stream: stream,
       );
     }
     return MatrixFile(
+      bytes: bytes,
       name: name,
       mimeType: mimeType,
       path: path,
-      stream: bytes != null ? Stream.value(bytes) : stream,
+      stream: stream,
     );
   }
 
@@ -186,7 +190,7 @@ class MatrixImageFile extends MatrixFile {
     final metaData = await nativeImplementations.calcImageMetadata(bytes);
 
     return MatrixImageFile(
-      stream: Stream.value(metaData?.bytes ?? bytes),
+      bytes: metaData?.bytes ?? bytes,
       name: name,
       mimeType: mimeType,
       width: metaData?.width,
@@ -208,7 +212,7 @@ class MatrixImageFile extends MatrixFile {
     )? customImageResizer,
     NativeImplementations nativeImplementations = NativeImplementations.dummy,
   }) async {
-    final image = MatrixImageFile(name: name, mimeType: mimeType, stream: Stream.value(bytes));
+    final image = MatrixImageFile(name: name, mimeType: mimeType, bytes: bytes);
 
     return await image.generateThumbnail(
           dimension: maxDimension,
@@ -283,7 +287,7 @@ class MatrixImageFile extends MatrixFile {
     }
 
     final thumbnailFile = MatrixImageFile(
-      stream: Stream.value(resizedData.bytes),
+      bytes: resizedData.bytes,
       name: name,
       mimeType: mimeType,
       width: resizedData.width,
