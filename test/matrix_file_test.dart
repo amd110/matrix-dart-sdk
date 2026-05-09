@@ -16,6 +16,7 @@
  *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -33,13 +34,13 @@ void main() {
     Logs().level = Level.error;
     test('Decrypt', () async {
       const text = 'hello world';
-      final file = MatrixFile(
-        name: 'file.txt',
-        bytes: Uint8List.fromList(text.codeUnits),
-      );
+      final tmpFile = File('${Directory.systemTemp.path}/matrix_test_encrypt.txt');
+      await tmpFile.writeAsBytes(Uint8List.fromList(text.codeUnits));
+      final file = MatrixFile(name: 'file.txt', path: tmpFile.path);
 
       final encryptedFile = await file.encrypt();
-      expect(encryptedFile.data?.isNotEmpty, true);
+      expect(encryptedFile.path.isNotEmpty, true);
+      await tmpFile.delete();
     });
 
     test('Shrink', () async {
@@ -50,11 +51,10 @@ void main() {
       );
 
       if (resp.statusCode == 200) {
-        final file = MatrixImageFile(
-          name: 'file.jpg',
-          bytes: resp.bodyBytes,
-        );
-        expect(file.bytes.isNotEmpty, true);
+        final tmpJpg = File('${Directory.systemTemp.path}/matrix_test_shrink.jpg');
+        await tmpJpg.writeAsBytes(resp.bodyBytes);
+        final file = MatrixImageFile(name: 'file.jpg', path: tmpJpg.path);
+        expect((await file.getBytes()).isNotEmpty, true);
         expect(file.height, null);
         expect(file.width, null);
 

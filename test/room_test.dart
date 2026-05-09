@@ -18,6 +18,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -31,33 +32,15 @@ class _MockNativeImplementations extends NativeImplementations {
   const _MockNativeImplementations();
 
   @override
-  FutureOr<EncryptedFile> encryptFile(
-    Uint8List bytes, {
-    bool retryInDummy = true,
-  }) {
-    // Return a valid EncryptedFile with mock data
-    return EncryptedFile(
-      data: Uint8List.fromList([...bytes, 1, 2, 3]),
-      k: 'mock_key_data_base64url',
-      iv: 'bW9ja19pdl9kYXRh', // base64 for "mock_iv_data"
-      sha256: 'bW9ja19zaGEyNTY=', // base64 for "mock_sha256"
-    );
-  }
-
-  @override
-  FutureOr<EncryptedFile> encryptFileStream(
-    Stream<List<int>> stream, {
-    int? size,
-    String? path,
+  Future<EncryptedFile> encryptFile(
+    File file, {
     bool retryInDummy = true,
   }) async {
-    final bytes = await stream.fold<List<int>>([], (p, e) => p..addAll(e));
     return EncryptedFile(
-      data: Uint8List.fromList([...bytes, 1, 2, 3]),
-      path: path,
+      path: file.path,
       k: 'mock_key_data_base64url',
-      iv: 'bW9ja19pdl9kYXRh', // base64 for "mock_iv_data"
-      sha256: 'bW9ja19zaGEyNTY=', // base64 for "mock_sha256"
+      iv: 'bW9ja19pdl9kYXRh',
+      sha256: 'bW9ja19zaGEyNTY=',
     );
   }
 
@@ -1151,9 +1134,12 @@ void main() {
     });
 
     test('setAvatar', () async {
-      final testFile = MatrixFile(bytes: Uint8List(0), name: 'file.jpeg');
+      final tmp = File('${Directory.systemTemp.path}/matrix_test_avatar.jpeg');
+      await tmp.writeAsBytes(Uint8List(0));
+      final testFile = MatrixFile(name: 'file.jpeg', path: tmp.path);
       final dynamic resp = await room.setAvatar(testFile);
       expect(resp, 'YUwRidLecu:example.com');
+      await tmp.delete();
     });
 
     test('sendEvent', () async {
@@ -1474,7 +1460,9 @@ void main() {
     });
 
     test('sendFileEvent', () async {
-      var testFile = MatrixFile(bytes: Uint8List(0), name: 'file.jpeg');
+      final tmp1 = File('${Directory.systemTemp.path}/matrix_test_send1.jpeg');
+      await tmp1.writeAsBytes(Uint8List(0));
+      var testFile = MatrixFile(name: 'file.jpeg', path: tmp1.path);
       final resp = await room.sendFileEvent(testFile, txid: 'testtxid');
       expect(resp.toString(), '\$event12');
       expect(
@@ -1487,9 +1475,12 @@ void main() {
         ),
         null, // It is sent so shouldn't be in cache anymore
       );
+      await tmp1.delete();
 
       const txnid = 'test_send_file_txnid';
-      testFile = MatrixFile(bytes: Uint8List.fromList([1]), name: 'crash.jpeg');
+      final tmp2 = File('${Directory.systemTemp.path}/matrix_test_crash.jpeg');
+      await tmp2.writeAsBytes(Uint8List.fromList([1]));
+      testFile = MatrixFile(name: 'crash.jpeg', path: tmp2.path);
       FakeMatrixApi
           .currentApi!.api['POST']!['/media/v3/upload?filename=crash.jpeg'] = {
         'errcode': 'M_UNKNOWN',
@@ -1499,6 +1490,7 @@ void main() {
       try {
         await room.sendFileEvent(testFile, txid: 'test_send_file_txnid');
       } catch (_) {}
+      await tmp2.delete();
 
       expect(
         await room.client.database.getFile(
@@ -1516,10 +1508,9 @@ void main() {
       'MatrixFile.encrypt() uses nativeImplementations when provided',
       () async {
         final testBytes = Uint8List.fromList([1, 2, 3, 4, 5]);
-        final file = MatrixFile(
-          bytes: testBytes,
-          name: 'test.dat',
-        );
+        final tmp = File('${Directory.systemTemp.path}/matrix_test_encrypt.dat');
+        await tmp.writeAsBytes(testBytes);
+        final file = MatrixFile(name: 'test.dat', path: tmp.path);
 
         // Create a mock NativeImplementations that returns a valid EncryptedFile
         final mockImpl = _MockNativeImplementations();
@@ -1530,10 +1521,11 @@ void main() {
         );
 
         expect(result, isA<EncryptedFile>());
-        expect(result.data?.isNotEmpty, true);
+        expect(result.path.isNotEmpty, true);
         expect(result.k.isNotEmpty, true);
         expect(result.iv.isNotEmpty, true);
         expect(result.sha256.isNotEmpty, true);
+        await tmp.delete();
       },
       tags: 'olm',
     );

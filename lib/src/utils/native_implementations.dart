@@ -7,66 +7,18 @@ import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix/src/utils/compute_callback.dart';
 import 'package:matrix/src/utils/crypto/encrypted_file.dart' as crypto_utils;
-import 'package:path/path.dart';
-import 'package:random_string/random_string.dart';
 
-/// provides native implementations for demanding arithmetic operations
-/// in order to prevent the UI from blocking
+/// Provides native implementations for demanding arithmetic operations
+/// in order to prevent the UI from blocking.
 ///
-/// possible implementations might be:
-/// - native code
-/// - another Dart isolate
-/// - a web worker
-/// - a dummy implementations
-///
-/// Rules for extension (important for [noSuchMethod] implementations)
-/// - always only accept exactly *one* positioned argument
-/// - catch the corresponding case in [NativeImplementations.noSuchMethod]
-/// - always write a dummy implementations
+/// Possible implementations:
+/// - [NativeImplementationsDummy]: inline, blocks UI
+/// - [NativeImplementationsIsolate]: Flutter `compute`-based, ephemeral isolate
+/// - [NativeImplementationsPersistentIsolate]: single long-lived isolate
 abstract class NativeImplementations {
   const NativeImplementations();
 
-  /// a dummy implementation executing all calls in the same thread causing
-  /// the UI to likely freeze
   static const dummy = NativeImplementationsDummy();
-
-  FutureOr<RoomKeys> generateUploadKeys(
-    GenerateUploadKeysArgs args, {
-    bool retryInDummy = true,
-  });
-
-  FutureOr<Uint8List> keyFromPassphrase(
-    KeyFromPassphraseArgs args, {
-    bool retryInDummy = true,
-  });
-
-  FutureOr<Uint8List?> decryptFile(
-    EncryptedFile file, {
-    bool retryInDummy = true,
-  });
-
-  FutureOr<Stream<List<int>>> decryptFileStream(
-    EncryptedFile file, {
-    String? path,
-    bool retryInDummy = true,
-  });
-
-  FutureOr<String> decryptFileToTempPath(
-    EncryptedFile file, {
-    bool retryInDummy = true,
-  });
-
-  FutureOr<EncryptedFile> encryptFile(
-    Uint8List bytes, {
-    bool retryInDummy = true,
-  });
-
-  FutureOr<EncryptedFile> encryptFileStream(
-    Stream<List<int>> stream, {
-    int? size,
-    String? path,
-    bool retryInDummy = true,
-  });
 
   FutureOr<MatrixImageFileResizedResponse?> shrinkImage(
     MatrixImageFileResizeArguments args, {
@@ -78,7 +30,28 @@ abstract class NativeImplementations {
     bool retryInDummy = false,
   });
 
-  /// this implementation will catch any non-implemented method
+  FutureOr<RoomKeys> generateUploadKeys(
+    GenerateUploadKeysArgs args, {
+    bool retryInDummy = true,
+  });
+
+  FutureOr<Uint8List> keyFromPassphrase(
+    KeyFromPassphraseArgs args, {
+    bool retryInDummy = true,
+  });
+
+  /// Encrypts [file] to a temporary file and returns metadata.
+  FutureOr<EncryptedFile> encryptFile(
+    File file, {
+    bool retryInDummy = true,
+  });
+
+  /// Decrypts [encryptedFile] to a temporary file and returns it.
+  FutureOr<File> decryptFile(
+    EncryptedFile encryptedFile, {
+    bool retryInDummy = true,
+  });
+
   @override
   dynamic noSuchMethod(Invocation invocation) {
     final dynamic argument = invocation.positionalArguments.single;
@@ -90,29 +63,22 @@ abstract class NativeImplementations {
       'Fallback from NativeImplementations.dummy used.',
     );
     switch (memberName) {
-      // we need to pass the futures right through or we will run into type errors later!
+      case 'shrinkImage':
+        return dummy.shrinkImage(argument);
+      case 'calcImageMetadata':
+        return dummy.calcImageMetadata(argument);
       case 'generateUploadKeys':
         // ignore: discarded_futures
         return dummy.generateUploadKeys(argument);
       case 'keyFromPassphrase':
         // ignore: discarded_futures
         return dummy.keyFromPassphrase(argument);
-      case 'decryptFile':
-        // ignore: discarded_futures
-        return dummy.decryptFile(argument);
-      case 'decryptFileStream':
-        // ignore: discarded_futures
-        return dummy.decryptFileStream(argument);
       case 'encryptFile':
         // ignore: discarded_futures
         return dummy.encryptFile(argument);
-      case 'encryptFileStream':
+      case 'decryptFile':
         // ignore: discarded_futures
-        return dummy.encryptFileStream(argument);
-      case 'shrinkImage':
-        return dummy.shrinkImage(argument);
-      case 'calcImageMetadata':
-        return dummy.calcImageMetadata(argument);
+        return dummy.decryptFile(argument);
       default:
         return super.noSuchMethod(invocation);
     }
@@ -123,86 +89,53 @@ class NativeImplementationsDummy extends NativeImplementations {
   const NativeImplementationsDummy();
 
   @override
-  Future<Uint8List?> decryptFile(
-    EncryptedFile file, {
-    bool retryInDummy = true,
-  }) {
-    return decryptFileImplementation(file);
-  }
-
-  @override
-  Future<String> decryptFileToTempPath(
-    EncryptedFile file, {
-    bool retryInDummy = true,
-  }) async {
-    final stream = await decryptFileStream(file, path: file.path);
-    final tmpFile = File(join(
-        Directory.systemTemp.path,
-        'dec_${DateTime.now().millisecondsSinceEpoch}_${randomAlphaNumeric(6)}.tmp'));
-    final sink = tmpFile.openWrite();
-    await for (final chunk in stream) {
-      sink.add(chunk);
-    }
-    await sink.close();
-    return tmpFile.path;
-  }
-
-  @override
-  FutureOr<EncryptedFile> encryptFile(
-    Uint8List bytes, {
-    bool retryInDummy = true,
-  }) {
-    return crypto_utils.encryptFile(bytes);
-  }
-
-  @override
-  Future<EncryptedFile> encryptFileStream(
-    Stream<List<int>> stream, {
-    int? size,
-    String? path,
-    bool retryInDummy = true,
-  }) async {
-    return crypto_utils.encryptFileStream(stream, path: path);
-  }
-
-  @override
-  Future<RoomKeys> generateUploadKeys(
-    GenerateUploadKeysArgs args, {
-    bool retryInDummy = true,
-  }) async {
-    return generateUploadKeysImplementation(args);
-  }
-
-  @override
-  Future<Uint8List> keyFromPassphrase(
-    KeyFromPassphraseArgs args, {
-    bool retryInDummy = true,
-  }) {
-    return generateKeyFromPassphrase(args);
-  }
-
-  @override
   MatrixImageFileResizedResponse? shrinkImage(
     MatrixImageFileResizeArguments args, {
     bool retryInDummy = false,
-  }) {
-    return MatrixImageFile.resizeImplementation(args);
-  }
+  }) =>
+      MatrixImageFile.resizeImplementation(args);
 
   @override
   MatrixImageFileResizedResponse? calcImageMetadata(
     Uint8List bytes, {
     bool retryInDummy = false,
-  }) {
-    return MatrixImageFile.calcMetadataImplementation(bytes);
-  }
+  }) =>
+      MatrixImageFile.calcMetadataImplementation(bytes);
+
+  @override
+  Future<RoomKeys> generateUploadKeys(
+    GenerateUploadKeysArgs args, {
+    bool retryInDummy = true,
+  }) async =>
+      generateUploadKeysImplementation(args);
+
+  @override
+  Future<Uint8List> keyFromPassphrase(
+    KeyFromPassphraseArgs args, {
+    bool retryInDummy = true,
+  }) =>
+      generateKeyFromPassphrase(args);
+
+  @override
+  Future<EncryptedFile> encryptFile(
+    File file, {
+    bool retryInDummy = true,
+  }) =>
+      crypto_utils.encryptFile(file);
+
+  @override
+  Future<File> decryptFile(
+    EncryptedFile encryptedFile, {
+    bool retryInDummy = true,
+  }) =>
+      crypto_utils.decryptFile(encryptedFile);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 持久化 Isolate 实现：vodozemac 只初始化一次，所有操作复用同一个 Isolate
+// Persistent Isolate: vodozemac is initialised once and all operations reuse
+// the same isolate.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// 持久化 isolate 的请求消息
 class _NativeRequest {
   final String method;
   final Object? arg;
@@ -210,19 +143,16 @@ class _NativeRequest {
   const _NativeRequest(this.method, this.arg, this.replyPort);
 }
 
-/// 持久化 isolate 的初始化参数
 class _NativeIsolateInitArgs {
   final SendPort readyPort;
   final Future<void> Function()? vodozemacInit;
   const _NativeIsolateInitArgs(this.readyPort, this.vodozemacInit);
 }
 
-/// 持久化 isolate 入口：初始化一次 vodozemac，然后进入消息循环处理所有请求
 Future<void> _persistentIsolateMain(_NativeIsolateInitArgs args) async {
   await args.vodozemacInit?.call();
 
   final receivePort = ReceivePort();
-  // 通知外部：isolate 已就绪，返回 SendPort
   args.readyPort.send(receivePort.sendPort);
 
   const dummy = NativeImplementations.dummy;
@@ -230,25 +160,21 @@ Future<void> _persistentIsolateMain(_NativeIsolateInitArgs args) async {
   await for (final message in receivePort) {
     if (message is! _NativeRequest) continue;
     try {
-      final result = await (switch (message.method) {
-        'decryptFile' =>
-          dummy.decryptFile(message.arg as EncryptedFile),
-        'decryptFileToTempPath' =>
-          dummy.decryptFileToTempPath(message.arg as EncryptedFile),
-        'encryptFile' =>
-          dummy.encryptFile(message.arg as Uint8List),
-        'encryptFileStream' =>
-          dummy.encryptFileStream(Stream.empty(), path: message.arg as String),
+      final result = await Future.value(switch (message.method) {
+        'encryptFile' => dummy.encryptFile(message.arg as File),
+        'decryptFile' => dummy.decryptFile(message.arg as EncryptedFile),
         'generateUploadKeys' =>
           dummy.generateUploadKeys(message.arg as GenerateUploadKeysArgs),
         'keyFromPassphrase' =>
           dummy.keyFromPassphrase(message.arg as KeyFromPassphraseArgs),
-        'shrinkImage' =>
-          dummy.shrinkImage(message.arg as MatrixImageFileResizeArguments),
-        'calcImageMetadata' =>
-          dummy.calcImageMetadata(message.arg as Uint8List),
+        'shrinkImage' => Future.value(
+            dummy.shrinkImage(message.arg as MatrixImageFileResizeArguments),
+          ),
+        'calcImageMetadata' => Future.value(
+            dummy.calcImageMetadata(message.arg as Uint8List),
+          ),
         _ => throw UnsupportedError('Unknown method: ${message.method}'),
-      });
+      },);
       message.replyPort.send((result: result, error: null));
     } catch (e) {
       message.replyPort.send((result: null, error: e));
@@ -256,23 +182,10 @@ Future<void> _persistentIsolateMain(_NativeIsolateInitArgs args) async {
   }
 }
 
-/// [NativeImplementations] 的持久化 Isolate 实现。
+/// [NativeImplementations] backed by a single long-lived isolate.
 ///
-/// 与 [NativeImplementationsIsolate]（基于 `compute`，每次调用都启动临时 isolate
-/// 并重新执行 vodozemacInit）不同，本实现只创建一个长生命周期的后台 isolate，
-/// vodozemac 仅初始化一次，所有后续操作都复用同一个 isolate 通道。
-///
-/// 适用于需要频繁解密（如消息列表中大量加密图片/视频）的场景，可避免因反复
-/// 初始化 Rust 库导致的线程积压和 iOS Watchdog 超时崩溃。
-///
-/// ```dart
-/// final client = Client(
-///   'MyApp',
-///   nativeImplementations: NativeImplementationsPersistentIsolate(
-///     vodozemacInit: () => vod.init(wasmPath: '...'),
-///   ),
-/// );
-/// ```
+/// vodozemac is initialised only once; all subsequent calls reuse the same
+/// isolate channel, avoiding the per-call Rust library bootstrap cost.
 class NativeImplementationsPersistentIsolate extends NativeImplementations {
   final Future<void> Function()? vodozemacInit;
 
@@ -282,7 +195,6 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
   SendPort? _sendPort;
   Future<void>? _initFuture;
 
-  /// 确保 isolate 已启动，返回可用的 SendPort
   Future<SendPort> _ensureStarted() async {
     if (_sendPort != null) return _sendPort!;
     _initFuture ??= _spawnIsolate();
@@ -311,7 +223,8 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
     return reply.result as T;
   }
 
-  /// 释放持久化 isolate。通常不需要手动调用，进程退出时会自动清理。
+  /// Releases the persistent isolate. Usually not needed — the process exit
+  /// handles cleanup automatically.
   void dispose() {
     _isolate?.kill(priority: Isolate.beforeNextEvent);
     _isolate = null;
@@ -320,47 +233,31 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
   }
 
   @override
-  Future<Uint8List?> decryptFile(EncryptedFile file, {bool retryInDummy = true}) =>
-      _call('decryptFile', file);
+  Future<EncryptedFile> encryptFile(
+    File file, {
+    bool retryInDummy = true,
+  }) =>
+      _call('encryptFile', file);
 
   @override
-  Future<Stream<List<int>>> decryptFileStream(EncryptedFile file, {String? path, bool retryInDummy = true}) async {
-    final targetPath = path ?? file.path;
-    if (targetPath == null) {
-      return NativeImplementations.dummy.decryptFileStream(file);
-    }
-    
-    // We must not send the stream across isolate boundary
-    file.path = targetPath;
-    file.dataStream = null;
-    final decryptedPath = await decryptFileToTempPath(file);
-    return File(decryptedPath).openRead();
-  }
+  Future<File> decryptFile(
+    EncryptedFile encryptedFile, {
+    bool retryInDummy = true,
+  }) =>
+      _call('decryptFile', encryptedFile);
 
   @override
-  Future<String> decryptFileToTempPath(EncryptedFile file, {bool retryInDummy = true}) {
-    file.dataStream = null; // Guard against isolate SendPort crash
-    return _call('decryptFileToTempPath', file);
-  }
-
-  @override
-  Future<EncryptedFile> encryptFile(Uint8List bytes, {bool retryInDummy = true}) =>
-      _call('encryptFile', bytes);
-
-  @override
-  Future<EncryptedFile> encryptFileStream(Stream<List<int>> stream, {int? size, String? path, bool retryInDummy = true}) async {
-    if (path == null) {
-      return NativeImplementations.dummy.encryptFileStream(stream, size: size);
-    }
-    return _call('encryptFileStream', path);
-  }
-
-  @override
-  Future<RoomKeys> generateUploadKeys(GenerateUploadKeysArgs args, {bool retryInDummy = true}) =>
+  Future<RoomKeys> generateUploadKeys(
+    GenerateUploadKeysArgs args, {
+    bool retryInDummy = true,
+  }) =>
       _call('generateUploadKeys', args);
 
   @override
-  Future<Uint8List> keyFromPassphrase(KeyFromPassphraseArgs args, {bool retryInDummy = true}) =>
+  Future<Uint8List> keyFromPassphrase(
+    KeyFromPassphraseArgs args, {
+    bool retryInDummy = true,
+  }) =>
       _call('keyFromPassphrase', args);
 
   @override
@@ -378,160 +275,86 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
       _call('calcImageMetadata', bytes);
 }
 
-/// a [NativeImplementations] based on Flutter's `compute` function
+/// [NativeImplementations] backed by Flutter's `compute` function.
 ///
-/// this implementations simply wraps the given [compute] function around
-/// the implementation of [NativeImplementations.dummy]
+/// Each call spawns a fresh ephemeral isolate and re-runs [vodozemacInit].
+/// Suitable for infrequent operations; for frequent decryption prefer
+/// [NativeImplementationsPersistentIsolate].
 class NativeImplementationsIsolate extends NativeImplementations {
-  /// pass by Flutter's compute function here
   final ComputeCallback compute;
   final Future<void> Function()? vodozemacInit;
 
   NativeImplementationsIsolate(
     this.compute, {
-    /// To generate upload keys, vodozemac needs to be initialized in the isolate.
     this.vodozemacInit,
   });
 
-  Future<T> runInBackground<T, U>(
-    FutureOr<T> Function(U arg) function,
-    U arg,
-  ) async {
-    final compute = this.compute;
-    return await compute(function, arg);
-  }
-
-  @override
-  Future<Uint8List?> decryptFile(
-    EncryptedFile file, {
-    bool retryInDummy = true,
-  }) {
-    return runInBackground<Uint8List?, EncryptedFile>(
-      (EncryptedFile args) async {
-        await vodozemacInit?.call();
-        return NativeImplementations.dummy.decryptFile(args);
-      },
-      file,
-    );
-  }
-
-  @override
-  Future<Stream<List<int>>> decryptFileStream(
-    EncryptedFile file, {
-    String? path,
-    bool retryInDummy = true,
-  }) async {
-    final targetPath = path ?? file.path;
-    if (targetPath == null) {
-      return NativeImplementations.dummy.decryptFileStream(file);
-    }
-    
-    file.path = targetPath;
-    file.dataStream = null;
-    final decryptedPath = await decryptFileToTempPath(file);
-    return File(decryptedPath).openRead();
-  }
-
-  @override
-  Future<String> decryptFileToTempPath(
-    EncryptedFile file, {
-    bool retryInDummy = true,
-  }) {
-    file.dataStream = null; // Guard against isolate SendPort crash
-    return runInBackground<String, EncryptedFile>(
-      (EncryptedFile args) async {
-        await vodozemacInit?.call();
-        return NativeImplementations.dummy.decryptFileToTempPath(args);
-      },
-      file,
-    );
-  }
+  Future<T> _run<T, U>(FutureOr<T> Function(U) fn, U arg) =>
+      compute(fn, arg);
 
   @override
   Future<EncryptedFile> encryptFile(
-    Uint8List bytes, {
+    File file, {
     bool retryInDummy = true,
-  }) {
-    return runInBackground<EncryptedFile, Uint8List>(
-      (Uint8List args) async {
-        await vodozemacInit?.call();
-        return NativeImplementations.dummy.encryptFile(args);
-      },
-      bytes,
-    );
-  }
-@override
-Future<EncryptedFile> encryptFileStream(
-  Stream<List<int>> stream, {
-  int? size,
-  String? path,
-  bool retryInDummy = true,
-}) {
-  if (path == null) {
-    // If we don't have a path, we cannot send the stream to the isolate.
-    // We must run it locally on the main thread.
-    return NativeImplementations.dummy.encryptFileStream(stream, size: size);
-  }
+  }) =>
+      _run(
+        (File f) async {
+          await vodozemacInit?.call();
+          return NativeImplementations.dummy.encryptFile(f);
+        },
+        file,
+      );
 
-  // We can safely send the path to the isolate
-  return runInBackground<EncryptedFile, String>(
-    (String isolatePath) async {
-      await vodozemacInit?.call();
-      // Run dummy implementation in isolate, ignoring the stream and using the path
-      return NativeImplementations.dummy.encryptFileStream(Stream.empty(), path: isolatePath);
-    },
-    path,
-  );
-}
+  @override
+  Future<File> decryptFile(
+    EncryptedFile encryptedFile, {
+    bool retryInDummy = true,
+  }) =>
+      _run(
+        (EncryptedFile ef) async {
+          await vodozemacInit?.call();
+          return NativeImplementations.dummy.decryptFile(ef);
+        },
+        encryptedFile,
+      );
 
   @override
   Future<RoomKeys> generateUploadKeys(
     GenerateUploadKeysArgs args, {
     bool retryInDummy = true,
-  }) async {
-    return runInBackground<RoomKeys, GenerateUploadKeysArgs>(
-      (GenerateUploadKeysArgs args) async {
-        await vodozemacInit?.call();
-        return NativeImplementations.dummy.generateUploadKeys(args);
-      },
-      args,
-    );
-  }
+  }) =>
+      _run(
+        (GenerateUploadKeysArgs a) async {
+          await vodozemacInit?.call();
+          return NativeImplementations.dummy.generateUploadKeys(a);
+        },
+        args,
+      );
 
   @override
   Future<Uint8List> keyFromPassphrase(
     KeyFromPassphraseArgs args, {
     bool retryInDummy = true,
-  }) {
-    return runInBackground<Uint8List, KeyFromPassphraseArgs>(
-      (KeyFromPassphraseArgs args) async {
-        await vodozemacInit?.call();
-        return NativeImplementations.dummy.keyFromPassphrase(args);
-      },
-      args,
-    );
-  }
+  }) =>
+      _run(
+        (KeyFromPassphraseArgs a) async {
+          await vodozemacInit?.call();
+          return NativeImplementations.dummy.keyFromPassphrase(a);
+        },
+        args,
+      );
 
   @override
   Future<MatrixImageFileResizedResponse?> shrinkImage(
     MatrixImageFileResizeArguments args, {
     bool retryInDummy = false,
-  }) {
-    return runInBackground<MatrixImageFileResizedResponse?,
-        MatrixImageFileResizeArguments>(
-      NativeImplementations.dummy.shrinkImage,
-      args,
-    );
-  }
+  }) =>
+      _run(NativeImplementations.dummy.shrinkImage, args);
 
   @override
   FutureOr<MatrixImageFileResizedResponse?> calcImageMetadata(
     Uint8List bytes, {
     bool retryInDummy = false,
-  }) {
-    return runInBackground<MatrixImageFileResizedResponse?, Uint8List>(
-      NativeImplementations.dummy.calcImageMetadata,
-      bytes,
-    );
-  }
+  }) =>
+      _run(NativeImplementations.dummy.calcImageMetadata, bytes);
 }

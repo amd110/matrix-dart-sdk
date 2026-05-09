@@ -442,7 +442,6 @@ class Event extends MatrixEvent {
       );
       if (thumbnailFile != null) {
         return MatrixImageFile(
-          stream: thumbnailFile.openRead(),
           path: thumbnailFile.path,
           name: filename,
           mimeType: thumbnailMimetype,
@@ -464,10 +463,9 @@ class Event extends MatrixEvent {
       throw Exception('Can not try to send again. File is no longer cached.');
     }
     
-    final fileStream = fileFile.openRead();
     return switch (messageType) {
       MessageTypes.Video => MatrixVideoFile(
-          stream: fileStream,
+          path: fileFile.path,
           name: filename,
           mimeType: attachmentMimetype,
           duration: infoMap.tryGet<int>('duration'),
@@ -475,13 +473,13 @@ class Event extends MatrixEvent {
           height: infoMap.tryGet<int>('h'),
         ),
       MessageTypes.Audio => MatrixAudioFile(
-          stream: fileStream,
+          path: fileFile.path,
           name: filename,
           mimeType: attachmentMimetype,
           duration: infoMap.tryGet<int>('duration'),
         ),
       MessageTypes.Image => MatrixImageFile(
-          stream: fileStream,
+          path: fileFile.path,
           name: filename,
           mimeType: attachmentMimetype,
           width: infoMap.tryGet<int>('w'),
@@ -489,7 +487,7 @@ class Event extends MatrixEvent {
           blurhash: infoMap.tryGet<String>('xyz.amorgan.blurhash'),
         ),
       MessageTypes.File || _ => MatrixFile(
-          stream: fileStream,
+          path: fileFile.path,
           name: filename,
           mimeType: attachmentMimetype,
         ),
@@ -846,11 +844,9 @@ class Event extends MatrixEvent {
     // 加密附件使用派生 key 缓存解密内容，避免将加密原文和解密内容混存
     final cacheKey = isEncrypted ? mxcUrl.replace(queryParameters: {'decrypted': '1'}) : mxcUrl;
 
-    Stream<List<int>>? dataStream;
     final cachedFile = await database.getFile(cacheKey);
     // 缓存命中（包括已解密的加密附件或已缓存的非加密附件）
     if (cachedFile != null) {
-      dataStream = cachedFile.openRead();
       final filename = content.tryGet<String>('filename') ?? body;
       return MatrixFile(
         path: cachedFile.path,
@@ -884,7 +880,6 @@ class Event extends MatrixEvent {
         cancellationToken: cancellationToken,
       );
 
-      dataStream = downloadedFile.openRead();
     } else {
       throw ('Unable to download file from local store.');
     }
@@ -904,13 +899,13 @@ class Event extends MatrixEvent {
         throw ("Missing 'decrypt' in 'key_ops'.");
       }
       final encryptedFile = EncryptedFile(
-        dataStream: null, // Avoid passing the stream to prevent Isolate SendPort crashes
         path: downloadedFile.path,
         iv: fileMap.tryGet<String>('iv')!,
         k: fileMap.tryGetMap<String, Object?>('key')!.tryGet<String>('k')!,
         sha256: fileMap.tryGetMap<String, Object?>('hashes')!.tryGet<String>('sha256')!,
       );
-      final decryptedPath = await room.client.nativeImplementations.decryptFileToTempPath(encryptedFile);
+      final decryptedFile = await room.client.nativeImplementations.decryptFile(encryptedFile);
+      final decryptedPath = decryptedFile.path;
 
       // 将解密后的内容写入缓存，后续调用可跳过下载和解密
       // 因为这是 IO 文件，缓存也是写文件。 我们可以通过 storeFileFromPath 直接移动文件，主线程 0 开销。
@@ -925,8 +920,9 @@ class Event extends MatrixEvent {
     final filename = content.tryGet<String>('filename') ?? body;
     final mimeType = attachmentMimetype;
 
+    if (downloadedFile == null) throw Exception('Downloaded file is missing');
     return MatrixFile(
-      path: downloadedFile?.path,
+      path: downloadedFile.path,
       name: getThumbnail ? '$filename.thumbnail.${extensionFromMime(mimeType)}' : filename,
       mimeType: attachmentMimetype,
     );

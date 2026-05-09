@@ -17,6 +17,7 @@
  */
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:test/test.dart';
@@ -196,12 +197,15 @@ void main() {
 
     test('thread_image', () async {
       FakeMatrixApi.calledEndpoints.clear();
-      final testImage = MatrixFile(bytes: Uint8List(0), name: 'file.jpeg');
+      final tmpImg = File('${Directory.systemTemp.path}/matrix_test_thread.jpeg');
+      await tmpImg.writeAsBytes(Uint8List(0));
+      final testImage = MatrixFile(name: 'file.jpeg', path: tmpImg.path);
       await room.sendFileEvent(
         testImage,
         threadRootEventId: '\$parent_event',
         threadLastEventId: '\$parent_event',
       );
+      await tmpImg.delete();
       final sent = getLastMessagePayload();
       expect(sent, {
         'msgtype': 'm.image',

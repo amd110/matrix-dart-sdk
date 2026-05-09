@@ -980,7 +980,7 @@ class Room {
         );
         if (shrinkImageMaxDimension != null) {
           file = await MatrixImageFile.shrink(
-            bytes: await file.getBytes(),
+            path: file.path,
             name: file.name,
             maxDimension: shrinkImageMaxDimension,
             customImageResizer: client.customImageResizer,

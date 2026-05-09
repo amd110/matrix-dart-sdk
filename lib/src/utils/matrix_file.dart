@@ -13,7 +13,7 @@
  *   GNU Affero General Public License for more details.
  *
  *   You should have received a copy of the GNU Affero General Public License
- *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *   along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 /// Workaround until [File] in dart:io and dart:html is unified
@@ -30,134 +30,34 @@ import 'package:mime/mime.dart';
 import 'package:matrix/matrix.dart';
 
 class MatrixFile {
-  final Uint8List? _bytes;
-  Uint8List get bytes => _bytes ?? Uint8List(0);
-
   final String name;
   final String mimeType;
-  final String? path;
-  final Stream<List<int>>? _stream;
-  final int? _size;
-
-  /// Encrypts this file and returns the
-  /// encryption information as an [EncryptedFile].
-  Future<EncryptedFile> encrypt({
-    NativeImplementations nativeImplementations = NativeImplementations.dummy,
-  }) async {
-      return await nativeImplementations.encryptFileStream(
-        getStream(),
-        size: size,
-        path: path,
-      );
-  }
+  final String path;
 
   MatrixFile({
-    Uint8List? bytes,
     required String name,
     String? mimeType,
-    this.path,
-    Stream<List<int>>? stream,
-    int? size,
-  })  : _bytes = bytes,
-        _stream = stream,
-        _size = size,
-        mimeType = mimeType != null && mimeType.isNotEmpty
+    required this.path,
+  })  : mimeType = mimeType != null && mimeType.isNotEmpty
             ? mimeType
             : lookupMimeType(name) ?? 'application/octet-stream',
         name = name.split('/').last;
 
+  /// Encrypts this file and returns an [EncryptedFile] with metadata.
+  Future<EncryptedFile> encrypt({
+    NativeImplementations nativeImplementations = NativeImplementations.dummy,
+  }) async =>
+      nativeImplementations.encryptFile(File(path));
+
   /// Retrieves the stream of the file content.
-  Stream<List<int>> getStream() {
-    if (_stream != null) return _stream;
-    final path = this.path;
-    if (path != null) {
-      return File(path).openRead();
-    }
-    if (_bytes != null) return Stream.value(_bytes);
-    return Stream.empty();
-  }
+  Stream<List<int>> getStream() => File(path).openRead();
 
+  /// Retrieves the file content as a single [Uint8List] byte array.
+  Future<Uint8List> getBytes() => File(path).readAsBytes();
 
-  Uint8List? _cachedBytes;
+  int get size => File(path).lengthSync();
 
-  /// Retrieves the file content as a single Uint8List byte array asynchronously.
-  /// Use with caution on large files to avoid memory issues.
-  Future<Uint8List> getBytes() async {
-    if (_bytes != null) return _bytes;
-    if (_cachedBytes != null) return _cachedBytes!;
-    final bytes = Uint8List.fromList(
-      await getStream().fold<List<int>>([], (previous, element) => previous..addAll(element)),
-    );
-    if (_stream != null && path == null) {
-      _cachedBytes = bytes;
-    }
-    return bytes;
-  }
-
-  /// derivatives the MIME type from the [bytes] and correspondingly creates a
-  /// [MatrixFile], [MatrixImageFile], [MatrixAudioFile] or a [MatrixVideoFile]
-  factory MatrixFile.fromMimeType({
-    required String name,
-    Uint8List? bytes,
-    String? mimeType,
-    String? path,
-    Stream<List<int>>? stream,
-  }) {
-    final msgType = msgTypeFromMime(
-      mimeType ??
-          lookupMimeType(name, headerBytes: bytes) ??
-          'application/octet-stream',
-    );
-    if (msgType == MessageTypes.Image) {
-      return MatrixImageFile(
-        bytes: bytes,
-        name: name,
-        mimeType: mimeType,
-        path: path,
-        stream: stream,
-      );
-    }
-    if (msgType == MessageTypes.Video) {
-      return MatrixVideoFile(
-        bytes: bytes,
-        name: name,
-        mimeType: mimeType,
-        path: path,
-        stream: stream,
-      );
-    }
-    if (msgType == MessageTypes.Audio) {
-      return MatrixAudioFile(
-        bytes: bytes,
-        name: name,
-        mimeType: mimeType,
-        path: path,
-        stream: stream,
-      );
-    }
-    return MatrixFile(
-      bytes: bytes,
-      name: name,
-      mimeType: mimeType,
-      path: path,
-      stream: stream,
-    );
-  }
-
-
-  int get size {
-    if (_size != null) return _size;
-    final path = this.path;
-    if (path != null) {
-      return File(path).lengthSync();
-    }
-    if (_bytes != null) return _bytes.length;
-    return 0; 
-  }
-
-  String get msgType {
-    return msgTypeFromMime(mimeType);
-  }
+  String get msgType => msgTypeFromMime(mimeType);
 
   Map<String, dynamic> get info => ({
         'mimetype': mimeType,
@@ -176,32 +76,59 @@ class MatrixFile {
     }
     return MessageTypes.File;
   }
+
+  /// Derives the MIME type from the file name / extension and creates the
+  /// appropriate subtype ([MatrixImageFile], [MatrixAudioFile],
+  /// [MatrixVideoFile], or [MatrixFile]).
+  factory MatrixFile.fromMimeType({
+    required String name,
+    String? mimeType,
+    required String path,
+  }) {
+    final resolvedMime =
+        mimeType ?? lookupMimeType(name) ?? 'application/octet-stream';
+    final msgType = msgTypeFromMime(resolvedMime);
+    if (msgType == MessageTypes.Image) {
+      return MatrixImageFile(name: name, mimeType: mimeType, path: path);
+    }
+    if (msgType == MessageTypes.Video) {
+      return MatrixVideoFile(name: name, mimeType: mimeType, path: path);
+    }
+    if (msgType == MessageTypes.Audio) {
+      return MatrixAudioFile(name: name, mimeType: mimeType, path: path);
+    }
+    return MatrixFile(name: name, mimeType: mimeType, path: path);
+  }
 }
 
 class MatrixImageFile extends MatrixFile {
   MatrixImageFile({
-    super.bytes,
     required super.name,
     super.mimeType,
-    super.path,
-    super.stream,
+    required super.path,
     int? width,
     int? height,
     this.blurhash,
   })  : _width = width,
         _height = height;
 
-  /// Creates a new image file and calculates the width, height and blurhash.
+  /// Creates a new image file, writes any re-encoded bytes back to [path],
+  /// and populates width/height/blurhash metadata.
   static Future<MatrixImageFile> create({
-    required Uint8List bytes,
+    required String path,
     required String name,
     String? mimeType,
     NativeImplementations nativeImplementations = NativeImplementations.dummy,
   }) async {
+    final bytes = await File(path).readAsBytes();
     final metaData = await nativeImplementations.calcImageMetadata(bytes);
 
+    if (metaData != null && metaData.bytes != bytes) {
+      await File(path).writeAsBytes(metaData.bytes);
+    }
+
     return MatrixImageFile(
-      bytes: metaData?.bytes ?? bytes,
+      path: path,
       name: name,
       mimeType: mimeType,
       width: metaData?.width,
@@ -211,10 +138,11 @@ class MatrixImageFile extends MatrixFile {
   }
 
   /// Builds a [MatrixImageFile] and shrinks it in order to reduce traffic.
-  /// If shrinking does not work (e.g. for unsupported MIME types), the
-  /// initial image is preserved without shrinking it.
+  /// The compressed bytes are written back to [path] so that the returned
+  /// file always has a valid on-disk path.
+  /// If shrinking fails the original file (at [path]) is returned unchanged.
   static Future<MatrixImageFile> shrink({
-    required Uint8List bytes,
+    required String path,
     required String name,
     int maxDimension = 1600,
     String? mimeType,
@@ -223,33 +151,39 @@ class MatrixImageFile extends MatrixFile {
     )? customImageResizer,
     NativeImplementations nativeImplementations = NativeImplementations.dummy,
   }) async {
-    final image = MatrixImageFile(name: name, mimeType: mimeType, bytes: bytes);
+    final image = MatrixImageFile(name: name, mimeType: mimeType, path: path);
 
-    return await image.generateThumbnail(
-          dimension: maxDimension,
-          customImageResizer: customImageResizer,
-          nativeImplementations: nativeImplementations,
-        ) ??
-        image;
+    final thumbnail = await image.generateThumbnail(
+      dimension: maxDimension,
+      customImageResizer: customImageResizer,
+      nativeImplementations: nativeImplementations,
+    );
+
+    if (thumbnail == null) return image;
+
+    // Write resized bytes back to the source path so encrypt() works directly.
+    await File(path).writeAsBytes(await thumbnail.getBytes());
+    return MatrixImageFile(
+      path: path,
+      name: thumbnail.name,
+      mimeType: thumbnail.mimeType,
+      width: thumbnail.width,
+      height: thumbnail.height,
+      blurhash: thumbnail.blurhash,
+    );
   }
 
   int? _width;
-
-  /// returns the width of the image
   int? get width => _width;
 
   int? _height;
-
-  /// returns the height of the image
   int? get height => _height;
 
-  /// If the image size is null, allow us to update it's value.
   void setImageSizeIfNull({required int? width, required int? height}) {
     _width ??= width;
     _height ??= height;
   }
 
-  /// generates the blur hash for the image
   final String? blurhash;
 
   @override
@@ -263,8 +197,8 @@ class MatrixImageFile extends MatrixFile {
         if (blurhash != null) 'xyz.amorgan.blurhash': blurhash,
       });
 
-  /// Computes a thumbnail for the image.
-  /// Also sets height and width on the original image if they were unset.
+  /// Computes a thumbnail for the image and writes it to a temporary file.
+  /// Also sets height/width on the original image if they were unset.
   Future<MatrixImageFile?> generateThumbnail({
     int dimension = Client.defaultThumbnailSize,
     Future<MatrixImageFileResizedResponse?> Function(
@@ -282,34 +216,31 @@ class MatrixImageFile extends MatrixFile {
         ? await customImageResizer(arguments)
         : await nativeImplementations.shrinkImage(arguments);
 
-    if (resizedData == null) {
-      return null;
-    }
+    if (resizedData == null) return null;
 
-    // we should take the opportunity to update the image dimension
     setImageSizeIfNull(
       width: resizedData.originalWidth,
       height: resizedData.originalHeight,
     );
 
-    // the thumbnail should rather return null than the enshrined image
     if (resizedData.width > dimension || resizedData.height > dimension) {
       return null;
     }
 
-    final thumbnailFile = MatrixImageFile(
-      bytes: resizedData.bytes,
+    final thumbPath =
+        '${Directory.systemTemp.path}/matrix_thumb_${DateTime.now().microsecondsSinceEpoch}.jpg';
+    await File(thumbPath).writeAsBytes(resizedData.bytes);
+
+    return MatrixImageFile(
+      path: thumbPath,
       name: name,
       mimeType: mimeType,
       width: resizedData.width,
       height: resizedData.height,
       blurhash: resizedData.blurhash,
     );
-    return thumbnailFile;
   }
 
-  /// you would likely want to use [NativeImplementations] andMatrixFile
-  /// [Client.nativeImplementations] instead
   static MatrixImageFileResizedResponse? calcMetadataImplementation(
     Uint8List bytes,
   ) {
@@ -320,42 +251,32 @@ class MatrixImageFile extends MatrixFile {
       bytes: bytes,
       width: image.width,
       height: image.height,
-      blurhash: BlurHash.encode(
-        image,
-        numCompX: 4,
-        numCompY: 3,
-      ).hash,
+      blurhash: BlurHash.encode(image, numCompX: 4, numCompY: 3).hash,
     );
   }
 
-  /// you would likely want to use [NativeImplementations] and
-  /// [Client.nativeImplementations] instead
   static MatrixImageFileResizedResponse? resizeImplementation(
     MatrixImageFileResizeArguments arguments,
   ) {
     final image = decodeImage(arguments.bytes);
+    if (image == null) return null;
 
     final resized = copyResize(
-      image!,
+      image,
       height: image.height > image.width ? arguments.maxDimension : null,
       width: image.width >= image.height ? arguments.maxDimension : null,
     );
 
     final encoded = encodeNamedImage(arguments.fileName, resized);
     if (encoded == null) return null;
-    final bytes = Uint8List.fromList(encoded);
     return MatrixImageFileResizedResponse(
-      bytes: bytes,
+      bytes: Uint8List.fromList(encoded),
       width: resized.width,
       height: resized.height,
       originalHeight: image.height,
       originalWidth: image.width,
       blurhash: arguments.calcBlurhash
-          ? BlurHash.encode(
-              resized,
-              numCompX: 4,
-              numCompY: 3,
-            ).hash
+          ? BlurHash.encode(resized, numCompX: 4, numCompY: 3).hash
           : null,
     );
   }
@@ -366,7 +287,6 @@ class MatrixImageFileResizedResponse {
   final int width;
   final int height;
   final String? blurhash;
-
   final int? originalHeight;
   final int? originalWidth;
 
@@ -379,9 +299,7 @@ class MatrixImageFileResizedResponse {
     this.blurhash,
   });
 
-  factory MatrixImageFileResizedResponse.fromJson(
-    Map<String, dynamic> json,
-  ) =>
+  factory MatrixImageFileResizedResponse.fromJson(Map<String, dynamic> json) =>
       MatrixImageFileResizedResponse(
         bytes: Uint8List.fromList(
           (json['bytes'] as Iterable<dynamic>).whereType<int>().toList(),
@@ -438,11 +356,9 @@ class MatrixVideoFile extends MatrixFile {
   final int? duration;
 
   MatrixVideoFile({
-    super.bytes,
     required super.name,
     super.mimeType,
-    super.path,
-    super.stream,
+    required super.path,
     this.width,
     this.height,
     this.duration,
@@ -464,11 +380,9 @@ class MatrixAudioFile extends MatrixFile {
   final int? duration;
 
   MatrixAudioFile({
-    super.bytes,
     required super.name,
     super.mimeType,
-    super.path,
-    super.stream,
+    required super.path,
     this.duration,
   });
 
@@ -483,11 +397,5 @@ class MatrixAudioFile extends MatrixFile {
 }
 
 extension ToMatrixFile on EncryptedFile {
-  MatrixFile toMatrixFile() {
-    return MatrixFile.fromMimeType(
-      bytes: data ?? Uint8List(0),
-      name: 'crypt',
-      stream: dataStream,
-    );
-  }
+  MatrixFile toMatrixFile() => MatrixFile(name: 'crypt', path: path);
 }

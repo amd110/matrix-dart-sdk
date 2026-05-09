@@ -8,7 +8,15 @@
       "Bash(echo \"exit: $?\")",
       "Bash(import_sorter *)",
       "Bash(dart pub *)",
-      "Bash(echo \"Exit code: $?\")"
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(sed -n '1130,1145p' /Users/sudan/FlutterProjects/matrix-dart-sdk2/test/room_test.dart)",
+      "Bash(sed -n '1455,1510p' /Users/sudan/FlutterProjects/matrix-dart-sdk2/test/room_test.dart)",
+      "Bash(sed -n '2270,2290p' /Users/sudan/FlutterProjects/matrix-dart-sdk2/test/event_test.dart)",
+      "Bash(sed -n '2350,2370p' /Users/sudan/FlutterProjects/matrix-dart-sdk2/test/event_test.dart)",
+      "Bash(sed -n '2400,2415p' /Users/sudan/FlutterProjects/matrix-dart-sdk2/test/event_test.dart)",
+      "Bash(sed -n '2525,2545p' /Users/sudan/FlutterProjects/matrix-dart-sdk2/test/event_test.dart)",
+      "Bash(sed -n '2580,2600p' /Users/sudan/FlutterProjects/matrix-dart-sdk2/test/event_test.dart)",
+      "Bash(sed -n '2630,2655p' /Users/sudan/FlutterProjects/matrix-dart-sdk2/test/event_test.dart)"
     ]
   }
 }

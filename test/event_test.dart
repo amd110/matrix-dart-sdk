@@ -2276,7 +2276,7 @@ void main() async {
         room,
       );
       var buffer = await event.downloadAndDecryptAttachment();
-      expect(buffer.bytes, FILE_BUFF);
+      expect(await buffer.getBytes(), FILE_BUFF);
       expect(
         event.attachmentOrThumbnailMxcUrl().toString(),
         'mxc://example.org/file',
@@ -2353,12 +2353,12 @@ void main() async {
       );
 
       buffer = await event.downloadAndDecryptAttachment();
-      expect(buffer.bytes, FILE_BUFF);
+      expect(await buffer.getBytes(), FILE_BUFF);
 
       buffer = await event.downloadAndDecryptAttachment(
         getThumbnail: true,
       );
-      expect(buffer.bytes, THUMBNAIL_BUFF);
+      expect(await buffer.getBytes(), THUMBNAIL_BUFF);
     });
     test(
       'encrypted attachments',
@@ -2405,7 +2405,7 @@ void main() async {
           room,
         );
         var buffer = await event.downloadAndDecryptAttachment();
-        expect(buffer.bytes, FILE_BUFF_DEC);
+        expect(await buffer.getBytes(), FILE_BUFF_DEC);
 
         event = Event.fromJson(
           {
@@ -2462,12 +2462,12 @@ void main() async {
         expect(event.attachmentMxcUrl.toString(), 'mxc://example.com/file');
         expect(event.thumbnailMxcUrl.toString(), 'mxc://example.com/thumb');
         buffer = await event.downloadAndDecryptAttachment();
-        expect(buffer.bytes, FILE_BUFF_DEC);
+        expect(await buffer.getBytes(), FILE_BUFF_DEC);
 
         buffer = await event.downloadAndDecryptAttachment(
           getThumbnail: true,
         );
-        expect(buffer.bytes, THUMB_BUFF_DEC);
+        expect(await buffer.getBytes(), THUMB_BUFF_DEC);
 
         await room.client.dispose(closeDatabase: true);
       },
@@ -2533,10 +2533,10 @@ void main() async {
         await event.isAttachmentInLocalStore(),
         event.room.client.database.supportsFileStoring,
       );
-      expect(buffer.bytes, FILE_BUFF);
+      expect(await buffer.getBytes(), FILE_BUFF);
       expect(serverHits, 1);
       buffer = await event.downloadAndDecryptAttachment();
-      expect(buffer.bytes, FILE_BUFF);
+      expect(await buffer.getBytes(), FILE_BUFF);
       expect(
         serverHits,
         event.room.client.database.supportsFileStoring ? 1 : 2,
@@ -2587,12 +2587,12 @@ void main() async {
 
       // 第一次：从服务器下载并解密
       final buffer1 = await event.downloadAndDecryptAttachment();
-      expect(buffer1.bytes, FILE_BUFF_DEC);
+      expect(await buffer1.getBytes(), FILE_BUFF_DEC);
       expect(serverHits, 1);
 
       // 第二次：若数据库支持文件存储，应命中解密缓存，不再请求服务器
       final buffer2 = await event.downloadAndDecryptAttachment();
-      expect(buffer2.bytes, FILE_BUFF_DEC);
+      expect(await buffer2.getBytes(), FILE_BUFF_DEC);
       expect(
         serverHits,
         event.room.client.database.supportsFileStoring ? 1 : 2,
@@ -2639,14 +2639,14 @@ void main() async {
         await event.isAttachmentInLocalStore(),
         event.room.client.database.supportsFileStoring,
       );
-      expect(buffer.bytes, FILE_BUFF);
+      expect(await buffer.getBytes(), FILE_BUFF);
       expect(serverHits, 1);
 
       if (event.room.client.database.supportsFileStoring == true) {
         buffer = await event.downloadAndDecryptAttachment(
           fromLocalStoreOnly: true,
         );
-        expect(buffer.bytes, FILE_BUFF);
+        expect(await buffer.getBytes(), FILE_BUFF);
       } else {
         expect(
           () async => await event.downloadAndDecryptAttachment(

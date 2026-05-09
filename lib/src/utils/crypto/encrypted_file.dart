@@ -18,69 +18,53 @@
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as dart_crypto;
 import 'package:path/path.dart';
 import 'package:random_string/random_string.dart';
-import 'package:vodozemac_plus/vodozemac_plus.dart';
 
 import 'package:matrix/encryption/utils/base64_unpadded.dart';
 import 'package:matrix/src/utils/crypto/crypto.dart';
 
+/// Holds encryption metadata and the path to the encrypted file on disk.
 class EncryptedFile {
   EncryptedFile({
-    this.data,
-    this.dataStream,
-    this.path,
+    required this.path,
     required this.k,
     required this.iv,
     required this.sha256,
   });
-  Uint8List? data;
-  Stream<List<int>>? dataStream;
-  String? path;
+
+  /// Path to the encrypted file on disk.
+  String path;
+
+  /// Base64url-encoded AES-256-CTR key (no padding).
   String k;
+
+  /// Base64-encoded initialization vector (no padding).
   String iv;
+
+  /// Base64-encoded SHA-256 hash of the encrypted bytes (no padding).
   String sha256;
 }
 
-Future<EncryptedFile> encryptFile(Uint8List input) async {
-  final key = secureRandomBytes(32);
-  final iv = secureRandomBytes(16);
-  final data = CryptoUtils.aesCtr(input: input, key: key, iv: iv);
-  final hash = CryptoUtils.sha256(input: data);
-  return EncryptedFile(
-    data: data,
-    k: base64Url.encode(key).replaceAll('=', ''),
-    iv: base64.encode(iv).replaceAll('=', ''),
-    sha256: base64.encode(hash).replaceAll('=', ''),
-  );
-}
-
-/// Encrypts a stream of data to a temporary file and calculates SHA256 on the fly.
-/// This prevents memory exhaustion for large files.
-/// The caller is responsible for deleting the temporary file if needed, 
-/// though it's typically used immediately for upload.
-Future<EncryptedFile> encryptFileStream(
-  Stream<List<int>> input, {
-  String? path,
+/// Encrypts [input] to a temporary file and returns metadata.
+///
+/// The caller owns the temporary file and is responsible for deleting it.
+Future<EncryptedFile> encryptFile(
+  File input, {
   Directory? tempDir,
 }) async {
   final key = secureRandomBytes(32);
   final iv = secureRandomBytes(16);
-  
-  // If path is provided, we can read directly from it, ignoring the input stream
-  // This is crucial for isolate execution where streams cannot cross the boundary
-  final effectiveStream = path != null ? File(path).openRead() : input;
-  
-  final encryptedStream = streamAesCtr(input: effectiveStream, key: key, iv: iv);
+
+  final encryptedStream = streamAesCtr(input: input.openRead(), key: key, iv: iv);
 
   final actualTempDir = tempDir ?? Directory.systemTemp;
   final tempFile = File(
     join(actualTempDir.path, 'matrix_encrypt_${randomAlphaNumeric(10)}.tmp'),
   );
-  final ios = tempFile.openWrite();
+  final sink = tempFile.openWrite();
 
   dart_crypto.Digest? finalDigest;
   final sha256Sink = dart_crypto.sha256.startChunkedConversion(
@@ -92,14 +76,12 @@ Future<EncryptedFile> encryptFileStream(
   try {
     await for (final chunk in encryptedStream) {
       sha256Sink.add(chunk);
-      ios.add(chunk);
+      sink.add(chunk);
     }
-    await ios.close();
+    await sink.close();
     sha256Sink.close();
 
-    if (finalDigest == null) {
-      throw Exception('Failed to calculate SHA256 digest');
-    }
+    if (finalDigest == null) throw Exception('Failed to calculate SHA256 digest');
 
     return EncryptedFile(
       path: tempFile.path,
@@ -108,42 +90,51 @@ Future<EncryptedFile> encryptFileStream(
       sha256: base64.encode(finalDigest!.bytes).replaceAll('=', ''),
     );
   } catch (e) {
-    await ios.close().catchError((_) {});
-    try {
-      if (await tempFile.exists()) {
-        await tempFile.delete();
-      }
-    } catch (_) {}
+    try { await sink.close(); } catch (_) {}
+    try { await tempFile.delete(); } catch (_) {}
     rethrow;
   }
 }
 
-/// you would likely want to use [NativeImplementations] and
-/// [Client.nativeImplementations] instead
-Future<Uint8List?> decryptFileImplementation(EncryptedFile input) async {
-  final data = input.data;
-  if (data == null) return null;
-  if (base64.encode(CryptoUtils.sha256(input: data)) !=
-      base64.normalize(input.sha256)) {
-    return null;
+/// Decrypts [input] to a temporary file and returns it.
+///
+/// Throws if the SHA-256 hash does not match (integrity check failed).
+/// The caller owns the temporary file and is responsible for deleting it.
+Future<File> decryptFile(
+  EncryptedFile input, {
+  Directory? tempDir,
+}) async {
+  final key = base64decodeUnpadded(base64.normalize(input.k));
+  final iv = base64decodeUnpadded(base64.normalize(input.iv));
+
+  final encryptedBytes = await File(input.path).readAsBytes();
+  final expectedHash = base64.normalize(input.sha256);
+  final actualHash = base64.encode(dart_crypto.sha256.convert(encryptedBytes).bytes);
+  if (actualHash != expectedHash) {
+    throw Exception('Encrypted file integrity check failed: SHA-256 mismatch');
   }
 
-  final key = base64decodeUnpadded(base64.normalize(input.k));
-  final iv = base64decodeUnpadded(base64.normalize(input.iv));
-  return CryptoUtils.aesCtr(input: data, key: key, iv: iv);
-}
-
-Stream<List<int>>? decryptFileStreamImplementation(EncryptedFile input, {String? path}) {
-  final targetPath = input.path ?? path;
-  final dataStream = targetPath != null ? File(targetPath).openRead() : input.dataStream;
-  if (dataStream == null) return null;
-
-  final key = base64decodeUnpadded(base64.normalize(input.k));
-  final iv = base64decodeUnpadded(base64.normalize(input.iv));
-
-  return streamAesCtr(
-    input: dataStream,
+  final decryptedStream = streamAesCtr(
+    input: Stream.value(encryptedBytes),
     key: key,
     iv: iv,
   );
+
+  final actualTempDir = tempDir ?? Directory.systemTemp;
+  final tempFile = File(
+    join(actualTempDir.path, 'matrix_decrypt_${randomAlphaNumeric(10)}.tmp'),
+  );
+  final sink = tempFile.openWrite();
+
+  try {
+    await for (final chunk in decryptedStream) {
+      sink.add(chunk);
+    }
+    await sink.close();
+    return tempFile;
+  } catch (e) {
+    try { await sink.close(); } catch (_) {}
+    try { await tempFile.delete(); } catch (_) {}
+    rethrow;
+  }
 }
