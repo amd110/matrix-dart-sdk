@@ -28,23 +28,34 @@ mixin DatabaseFileStorage {
 
   Future<void> storeFileStream(Uri mxcUri, Stream<List<int>> stream, int time) async {
     final fileStorageLocation = this.fileStorageLocation;
-    if (!supportsFileStoring || fileStorageLocation == null) return;
+    if (!supportsFileStoring || fileStorageLocation == null) {
+      // Drain the stream to ensure side-effects (like decryption) can finish
+      await stream.drain();
+      return;
+    }
 
     final file = _getFileFromMxc(mxcUri);
-    if (await file.exists()) return;
 
-    final sink = file.openWrite();
+    final tmpFile = File('${file.path}.tmp');
+    final sink = tmpFile.openWrite();
     try {
       await for (final chunk in stream) {
         sink.add(chunk);
       }
       await sink.close();
+      
+      // If it exists, we overwrite it to ensure we don't leave half-written corrupt files.
+      // Rename is atomic and will overwrite the existing file on POSIX.
+      if (await file.exists()) {
+        await file.delete();
+      }
+      await tmpFile.rename(file.path);
     } catch (e) {
       try {
         await sink.close();
       } catch (_) {}
       try {
-        if (await file.exists()) await file.delete();
+        if (await tmpFile.exists()) await tmpFile.delete();
       } catch (_) {}
       rethrow;
     }

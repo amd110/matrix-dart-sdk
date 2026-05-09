@@ -826,27 +826,22 @@ class Event extends MatrixEvent {
     // 加密附件使用派生 key 缓存解密内容，避免将加密原文和解密内容混存
     final cacheKey = isEncrypted ? mxcUrl.replace(queryParameters: {'decrypted': '1'}) : mxcUrl;
 
-    // Is this file storeable?
-    final thisInfoMap = getThumbnail ? thumbnailInfoMap : infoMap;
-    final thisInfoMapSize = thisInfoMap.tryGet<int>('size');
-    var storeable = thisInfoMapSize != null && thisInfoMapSize <= database.maxFileSize;
-
     Stream<List<int>>? dataStream;
-    if (storeable) {
-      final cachedFile = await database.getFile(cacheKey);
-      // 缓存命中（包括已解密的加密附件或已缓存的非加密附件）
-      if (cachedFile != null) {
-        dataStream = cachedFile.openRead();
-        final filename = content.tryGet<String>('filename') ?? body;
-        return MatrixFile(
-          path: cachedFile.path,
-          name: getThumbnail
-              ? '$filename.thumbnail.${extensionFromMime(attachmentMimetype)}'
-              : filename,
-          mimeType: attachmentMimetype,
-        );
-      }
+
+    final cachedFile = await database.getFile(cacheKey);
+    // 缓存命中（包括已解密的加密附件或已缓存的非加密附件）
+    if (cachedFile != null) {
+      dataStream = cachedFile.openRead();
+      final filename = content.tryGet<String>('filename') ?? body;
+      return MatrixFile(
+        path: cachedFile.path,
+        name: getThumbnail
+            ? '$filename.thumbnail.${extensionFromMime(attachmentMimetype)}'
+            : filename,
+        mimeType: attachmentMimetype,
+      );
     }
+
     File? downloadedFile;
     // 下载文件
     final canDownloadFileFromServer = !fromLocalStoreOnly;
@@ -898,23 +893,19 @@ class Event extends MatrixEvent {
       dataStream = await room.client.nativeImplementations.decryptFileStream(encryptedFile);
       // 将解密后的内容写入缓存，后续调用可跳过下载和解密
       // 为了不影响向上传递 stream，我们可以在写入缓存后重新获取 stream，或者将 stream 转为 broadcast。
-      // 因为这是 IO 文件，缓存也是写文件。如果 storeable，我们可以先写缓存，再从缓存读。
-      if (storeable) {
-        await database.storeFileStream(
-          cacheKey,
-          dataStream,
-          DateTime.now().millisecondsSinceEpoch,
-        );
-        downloadedFile = await database.getFile(cacheKey);
-        dataStream = downloadedFile?.openRead();
-      }
+      // 因为这是 IO 文件，缓存也是写文件。 我们可以先写缓存，再从缓存读。
+      await database.storeFileStream(
+        cacheKey,
+        dataStream,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+      downloadedFile = await database.getFile(cacheKey);
     }
 
     final filename = content.tryGet<String>('filename') ?? body;
     final mimeType = attachmentMimetype;
 
     return MatrixFile(
-      stream: dataStream,
       path: downloadedFile?.path,
       name: getThumbnail ? '$filename.thumbnail.${extensionFromMime(mimeType)}' : filename,
       mimeType: attachmentMimetype,
