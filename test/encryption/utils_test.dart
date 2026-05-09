@@ -24,6 +24,8 @@ import 'package:test/test.dart';
 import 'package:matrix/encryption/utils/base64_unpadded.dart';
 import 'package:matrix/encryption/utils/pickle_key.dart';
 import 'package:matrix/matrix.dart';
+import 'package:matrix/src/utils/crypto/crypto.dart';
+import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
 
 void main() {
   group('Utils', () {
@@ -107,6 +109,37 @@ void main() {
         Uint8List.fromList(longKey.codeUnits.take(32).toList()),
         reason: 'Pickle key should match the first 32 bytes of the input',
       );
+    });
+  });
+
+  group('Streaming Encryption', tags: 'olm', () {
+    test('streamAesCtr matches CryptoUtils.aesCtr', () async {
+      await vod.init(
+        wasmPath: './pkg/',
+        libraryPath: './rust/target/debug/',
+      );
+
+      final key = secureRandomBytes(32);
+      final iv = secureRandomBytes(16);
+      
+      // Generate a mock 10KB "video" file
+      final fileData = secureRandomBytes(10240);
+
+      // 1. Encrypt with one-shot C FFI
+      final oneShotEncrypted = vod.CryptoUtils.aesCtr(input: fileData, key: key, iv: iv);
+
+      // 2. Encrypt with chunked stream
+      // Chunk into 100 byte pieces
+      final chunkSize = 100;
+      final chunks = <List<int>>[];
+      for (var i = 0; i < fileData.length; i += chunkSize) {
+        chunks.add(fileData.sublist(i, i + chunkSize > fileData.length ? fileData.length : i + chunkSize));
+      }
+      final stream = Stream.fromIterable(chunks);
+
+      final streamEncrypted = await streamAesCtr(input: stream, key: key, iv: iv).fold<List<int>>(<int>[], (p, e) => p..addAll(e));
+
+      expect(Uint8List.fromList(streamEncrypted), oneShotEncrypted);
     });
   });
 }

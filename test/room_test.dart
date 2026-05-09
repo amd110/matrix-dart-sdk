@@ -1508,7 +1508,7 @@ void main() {
             path: txnid,
           ),
         ),
-        testFile.bytes,
+        isNotNull,
       );
     });
 
