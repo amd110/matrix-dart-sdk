@@ -45,6 +45,23 @@ class _MockNativeImplementations extends NativeImplementations {
   }
 
   @override
+  FutureOr<EncryptedFile> encryptFileStream(
+    Stream<List<int>> stream, {
+    int? size,
+    String? path,
+    bool retryInDummy = true,
+  }) async {
+    final bytes = await stream.fold<List<int>>([], (p, e) => p..addAll(e));
+    return EncryptedFile(
+      data: Uint8List.fromList([...bytes, 1, 2, 3]),
+      path: path,
+      k: 'mock_key_data_base64url',
+      iv: 'bW9ja19pdl9kYXRh', // base64 for "mock_iv_data"
+      sha256: 'bW9ja19zaGEyNTY=', // base64 for "mock_sha256"
+    );
+  }
+
+  @override
   dynamic noSuchMethod(Invocation invocation) {
     // Delegate all other methods to dummy implementation
     return NativeImplementations.dummy.noSuchMethod(invocation);

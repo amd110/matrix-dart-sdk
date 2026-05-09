@@ -309,7 +309,6 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
 
   @override
   Future<Stream<List<int>>> decryptFileStream(EncryptedFile file, {String? path, bool retryInDummy = true}) async {
-    await vodozemacInit?.call();
     return NativeImplementations.dummy.decryptFileStream(file, path: path);
   }
 
@@ -320,7 +319,6 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
   @override
   Future<EncryptedFile> encryptFileStream(Stream<List<int>> stream, {int? size, String? path, bool retryInDummy = true}) async {
     if (path == null) {
-      await vodozemacInit?.call();
       return NativeImplementations.dummy.encryptFileStream(stream, size: size);
     }
     return _call('encryptFileStream', path);
@@ -392,7 +390,6 @@ class NativeImplementationsIsolate extends NativeImplementations {
     String? path,
     bool retryInDummy = true,
   }) async {
-    await vodozemacInit?.call();
     return NativeImplementations.dummy.decryptFileStream(file, path: path);
   }
 
