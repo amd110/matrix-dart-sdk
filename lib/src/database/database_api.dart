@@ -132,6 +132,8 @@ abstract class DatabaseApi {
 
   Future storeFileStream(Uri mxcUri, Stream<List<int>> stream, int time);
 
+  Future storeFileFromPath(Uri mxcUri, String path, int time);
+
   Future<bool> deleteFile(Uri mxcUri);
 
   Future storeSyncFilterId(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
@@ -6,6 +7,8 @@ import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix/src/utils/compute_callback.dart';
 import 'package:matrix/src/utils/crypto/encrypted_file.dart' as crypto_utils;
+import 'package:path/path.dart';
+import 'package:random_string/random_string.dart';
 
 /// provides native implementations for demanding arithmetic operations
 /// in order to prevent the UI from blocking
@@ -45,6 +48,11 @@ abstract class NativeImplementations {
   FutureOr<Stream<List<int>>> decryptFileStream(
     EncryptedFile file, {
     String? path,
+    bool retryInDummy = true,
+  });
+
+  FutureOr<String> decryptFileToTempPath(
+    EncryptedFile file, {
     bool retryInDummy = true,
   });
 
@@ -123,14 +131,20 @@ class NativeImplementationsDummy extends NativeImplementations {
   }
 
   @override
-  Future<Stream<List<int>>> decryptFileStream(
+  Future<String> decryptFileToTempPath(
     EncryptedFile file, {
-    String? path,
     bool retryInDummy = true,
   }) async {
-    final stream = crypto_utils.decryptFileStreamImplementation(file, path: path);
-    if (stream == null) throw Exception('Unable to decrypt file stream');
-    return stream;
+    final stream = await decryptFileStream(file, path: file.path);
+    final tmpFile = File(join(
+        Directory.systemTemp.path,
+        'dec_${DateTime.now().millisecondsSinceEpoch}_${randomAlphaNumeric(6)}.tmp'));
+    final sink = tmpFile.openWrite();
+    await for (final chunk in stream) {
+      sink.add(chunk);
+    }
+    await sink.close();
+    return tmpFile.path;
   }
 
   @override
@@ -216,23 +230,25 @@ Future<void> _persistentIsolateMain(_NativeIsolateInitArgs args) async {
   await for (final message in receivePort) {
     if (message is! _NativeRequest) continue;
     try {
-      final result = switch (message.method) {
+      final result = await (switch (message.method) {
         'decryptFile' =>
-          await dummy.decryptFile(message.arg as EncryptedFile),
+          dummy.decryptFile(message.arg as EncryptedFile),
+        'decryptFileToTempPath' =>
+          dummy.decryptFileToTempPath(message.arg as EncryptedFile),
         'encryptFile' =>
-          await dummy.encryptFile(message.arg as Uint8List),
+          dummy.encryptFile(message.arg as Uint8List),
         'encryptFileStream' =>
-          await dummy.encryptFileStream(Stream.empty(), path: message.arg as String),
+          dummy.encryptFileStream(Stream.empty(), path: message.arg as String),
         'generateUploadKeys' =>
-          await dummy.generateUploadKeys(message.arg as GenerateUploadKeysArgs),
+          dummy.generateUploadKeys(message.arg as GenerateUploadKeysArgs),
         'keyFromPassphrase' =>
-          await dummy.keyFromPassphrase(message.arg as KeyFromPassphraseArgs),
+          dummy.keyFromPassphrase(message.arg as KeyFromPassphraseArgs),
         'shrinkImage' =>
           dummy.shrinkImage(message.arg as MatrixImageFileResizeArguments),
         'calcImageMetadata' =>
           dummy.calcImageMetadata(message.arg as Uint8List),
         _ => throw UnsupportedError('Unknown method: ${message.method}'),
-      };
+      });
       message.replyPort.send((result: result, error: null));
     } catch (e) {
       message.replyPort.send((result: null, error: e));
@@ -309,7 +325,22 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
 
   @override
   Future<Stream<List<int>>> decryptFileStream(EncryptedFile file, {String? path, bool retryInDummy = true}) async {
-    return NativeImplementations.dummy.decryptFileStream(file, path: path);
+    final targetPath = path ?? file.path;
+    if (targetPath == null) {
+      return NativeImplementations.dummy.decryptFileStream(file);
+    }
+    
+    // We must not send the stream across isolate boundary
+    file.path = targetPath;
+    file.dataStream = null;
+    final decryptedPath = await decryptFileToTempPath(file);
+    return File(decryptedPath).openRead();
+  }
+
+  @override
+  Future<String> decryptFileToTempPath(EncryptedFile file, {bool retryInDummy = true}) {
+    file.dataStream = null; // Guard against isolate SendPort crash
+    return _call('decryptFileToTempPath', file);
   }
 
   @override
@@ -390,7 +421,30 @@ class NativeImplementationsIsolate extends NativeImplementations {
     String? path,
     bool retryInDummy = true,
   }) async {
-    return NativeImplementations.dummy.decryptFileStream(file, path: path);
+    final targetPath = path ?? file.path;
+    if (targetPath == null) {
+      return NativeImplementations.dummy.decryptFileStream(file);
+    }
+    
+    file.path = targetPath;
+    file.dataStream = null;
+    final decryptedPath = await decryptFileToTempPath(file);
+    return File(decryptedPath).openRead();
+  }
+
+  @override
+  Future<String> decryptFileToTempPath(
+    EncryptedFile file, {
+    bool retryInDummy = true,
+  }) {
+    file.dataStream = null; // Guard against isolate SendPort crash
+    return runInBackground<String, EncryptedFile>(
+      (EncryptedFile args) async {
+        await vodozemacInit?.call();
+        return NativeImplementations.dummy.decryptFileToTempPath(args);
+      },
+      file,
+    );
   }
 
   @override

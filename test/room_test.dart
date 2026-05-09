@@ -1489,7 +1489,7 @@ void main() {
       );
 
       const txnid = 'test_send_file_txnid';
-      testFile = MatrixFile(bytes: Uint8List(0), name: 'crash.jpeg');
+      testFile = MatrixFile(bytes: Uint8List.fromList([1]), name: 'crash.jpeg');
       FakeMatrixApi
           .currentApi!.api['POST']!['/media/v3/upload?filename=crash.jpeg'] = {
         'errcode': 'M_UNKNOWN',

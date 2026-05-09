@@ -864,17 +864,67 @@ class Room {
     bool displayPendingEvent = true,
   }) async {
     txid ??= client.generateUniqueTransactionId();
+    
+    final fileCacheUri = Uri(scheme: 'cache', host: 'file', path: txid);
     await client.database.storeFileStream(
-      Uri(scheme: 'cache', host: 'file', path: txid),
+      fileCacheUri,
       file.getStream(),
       DateTime.now().millisecondsSinceEpoch,
     );
+    final cachedFile = await client.database.getFile(fileCacheUri);
+    if (cachedFile != null) {
+      if (file is MatrixImageFile) {
+        file = MatrixImageFile(
+          path: cachedFile.path,
+          name: file.name,
+          mimeType: file.mimeType,
+          width: file.width,
+          height: file.height,
+          blurhash: file.blurhash,
+        );
+      } else if (file is MatrixVideoFile) {
+        file = MatrixVideoFile(
+          path: cachedFile.path,
+          name: file.name,
+          mimeType: file.mimeType,
+          width: file.width,
+          height: file.height,
+          duration: file.duration,
+        );
+      } else if (file is MatrixAudioFile) {
+        file = MatrixAudioFile(
+          path: cachedFile.path,
+          name: file.name,
+          mimeType: file.mimeType,
+          duration: file.duration,
+        );
+      } else {
+        file = MatrixFile(
+          path: cachedFile.path,
+          name: file.name,
+          mimeType: file.mimeType,
+        );
+      }
+    }
+
     if (thumbnail != null) {
+      final thumbCacheUri = Uri(scheme: 'cache', host: 'thumbnail', path: txid);
       await client.database.storeFileStream(
-        Uri(scheme: 'cache', host: 'thumbnail', path: txid),
+        thumbCacheUri,
         thumbnail.getStream(),
         DateTime.now().millisecondsSinceEpoch,
       );
+      final cachedThumb = await client.database.getFile(thumbCacheUri);
+      if (cachedThumb != null) {
+        thumbnail = MatrixImageFile(
+          path: cachedThumb.path,
+          name: thumbnail.name,
+          mimeType: thumbnail.mimeType,
+          width: thumbnail.width,
+          height: thumbnail.height,
+          blurhash: thumbnail.blurhash,
+        );
+      }
     }
 
     // Create a fake Event object as a placeholder for the uploading file:
@@ -930,7 +980,7 @@ class Room {
         );
         if (shrinkImageMaxDimension != null) {
           file = await MatrixImageFile.shrink(
-            bytes: file.bytes,
+            bytes: await file.getBytes(),
             name: file.name,
             maxDimension: shrinkImageMaxDimension,
             customImageResizer: client.customImageResizer,
@@ -951,8 +1001,8 @@ class Room {
     try {
       final mediaConfig = await client.getConfig();
       final maxMediaSize = mediaConfig.mUploadSize;
-      if (maxMediaSize != null && maxMediaSize < file.bytes.lengthInBytes) {
-        throw FileTooBigMatrixException(file.bytes.lengthInBytes, maxMediaSize);
+      if (maxMediaSize != null && maxMediaSize < file.size) {
+        throw FileTooBigMatrixException(file.size, maxMediaSize);
       }
     } catch (e) {
       Logs().d('Config error while sending file', e);
@@ -992,13 +1042,15 @@ class Room {
         (uploadThumbnail != null && thumbnailUploadResp == null)) {
       try {
         uploadResp = await client.uploadContent(
-          uploadFile.bytes,
+          uploadFile.getStream(),
+          contentLength: uploadFile.size,
           filename: uploadFile.name,
           contentType: uploadFile.mimeType,
         );
         thumbnailUploadResp = uploadThumbnail != null
             ? await client.uploadContent(
-                uploadThumbnail.bytes,
+                uploadThumbnail.getStream(),
+                contentLength: uploadThumbnail.size,
                 filename: uploadThumbnail.name,
                 contentType: uploadThumbnail.mimeType,
               )
@@ -2170,7 +2222,8 @@ class Room {
     final uploadResp = file == null
         ? null
         : await client.uploadContent(
-            file.bytes,
+            file.getStream(),
+            contentLength: file.size,
             filename: file.name,
           );
     return await client.setRoomStateWithKey(

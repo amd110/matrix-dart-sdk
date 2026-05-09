@@ -44,16 +44,11 @@ class MatrixFile {
   Future<EncryptedFile> encrypt({
     NativeImplementations nativeImplementations = NativeImplementations.dummy,
   }) async {
-    if (path != null || _stream != null) {
       return await nativeImplementations.encryptFileStream(
         getStream(),
         size: size,
+        path: path,
       );
-    }
-    return await nativeImplementations.encryptFileStream(
-      Stream.empty(),
-      size: 0,
-    );
   }
 
   MatrixFile({
@@ -82,6 +77,22 @@ class MatrixFile {
     return Stream.empty();
   }
 
+
+  Uint8List? _cachedBytes;
+
+  /// Retrieves the file content as a single Uint8List byte array asynchronously.
+  /// Use with caution on large files to avoid memory issues.
+  Future<Uint8List> getBytes() async {
+    if (_bytes != null) return _bytes;
+    if (_cachedBytes != null) return _cachedBytes!;
+    final bytes = Uint8List.fromList(
+      await getStream().fold<List<int>>([], (previous, element) => previous..addAll(element)),
+    );
+    if (_stream != null && path == null) {
+      _cachedBytes = bytes;
+    }
+    return bytes;
+  }
 
   /// derivatives the MIME type from the [bytes] and correspondingly creates a
   /// [MatrixFile], [MatrixImageFile], [MatrixAudioFile] or a [MatrixVideoFile]
@@ -262,7 +273,7 @@ class MatrixImageFile extends MatrixFile {
     NativeImplementations nativeImplementations = NativeImplementations.dummy,
   }) async {
     final arguments = MatrixImageFileResizeArguments(
-      bytes: bytes,
+      bytes: await getBytes(),
       maxDimension: dimension,
       fileName: name,
       calcBlurhash: true,

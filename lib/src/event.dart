@@ -778,9 +778,6 @@ class Event extends MatrixEvent {
     return (await room.client.database.getFile(cacheKey)) != null;
   }
 
-  Future<MatrixFile>? _inFlightAttachmentDownload;
-  Future<MatrixFile>? _inFlightThumbnailDownload;
-
   /// Downloads (and decrypts if necessary) the attachment of this
   /// event and returns it as a [MatrixFile]. If this event doesn't
   /// contain an attachment, this throws an error. Set [getThumbnail] to
@@ -798,36 +795,35 @@ class Event extends MatrixEvent {
     /// 取消后抛出 [DownloadCancelledException]。
     CancellationToken? cancellationToken,
   }) async {
-    final inFlight = getThumbnail ? _inFlightThumbnailDownload : _inFlightAttachmentDownload;
+    final mxcUrl = attachmentOrThumbnailMxcUrl(getThumbnail: getThumbnail);
+    if (mxcUrl == null) {
+      throw "This event hasn't any attachment or thumbnail.";
+    }
+
+    final inFlight = room.client.inFlightDownloads[mxcUrl];
     if (inFlight != null) {
       return inFlight;
     }
 
     final future = _downloadAndDecryptAttachmentInternal(
+      mxcUrl,
       getThumbnail: getThumbnail,
       fromLocalStoreOnly: fromLocalStoreOnly,
       onDownloadProgress: onDownloadProgress,
       cancellationToken: cancellationToken,
     );
 
-    if (getThumbnail) {
-      _inFlightThumbnailDownload = future;
-    } else {
-      _inFlightAttachmentDownload = future;
-    }
+    room.client.inFlightDownloads[mxcUrl] = future;
 
     try {
       return await future;
     } finally {
-      if (getThumbnail) {
-        _inFlightThumbnailDownload = null;
-      } else {
-        _inFlightAttachmentDownload = null;
-      }
+      room.client.inFlightDownloads.remove(mxcUrl);
     }
   }
 
-  Future<MatrixFile> _downloadAndDecryptAttachmentInternal({
+  Future<MatrixFile> _downloadAndDecryptAttachmentInternal(
+    Uri mxcUrl, {
     bool getThumbnail = false,
     bool fromLocalStoreOnly = false,
     void Function(int)? onDownloadProgress,
@@ -841,10 +837,6 @@ class Event extends MatrixEvent {
       if (localFile != null) return localFile;
     }
     final database = room.client.database;
-    final mxcUrl = attachmentOrThumbnailMxcUrl(getThumbnail: getThumbnail);
-    if (mxcUrl == null) {
-      throw "This event hasn't any attachment or thumbnail.";
-    }
     getThumbnail = mxcUrl != attachmentMxcUrl;
     final isEncrypted = getThumbnail ? isThumbnailEncrypted : isAttachmentEncrypted;
     if (isEncrypted && !room.client.encryptionEnabled) {
@@ -912,19 +904,19 @@ class Event extends MatrixEvent {
         throw ("Missing 'decrypt' in 'key_ops'.");
       }
       final encryptedFile = EncryptedFile(
-        dataStream: dataStream,
-        path: downloadedFile?.path,
+        dataStream: null, // Avoid passing the stream to prevent Isolate SendPort crashes
+        path: downloadedFile.path,
         iv: fileMap.tryGet<String>('iv')!,
         k: fileMap.tryGetMap<String, Object?>('key')!.tryGet<String>('k')!,
         sha256: fileMap.tryGetMap<String, Object?>('hashes')!.tryGet<String>('sha256')!,
       );
-      dataStream = await room.client.nativeImplementations.decryptFileStream(encryptedFile, path: downloadedFile?.path);
+      final decryptedPath = await room.client.nativeImplementations.decryptFileToTempPath(encryptedFile);
+
       // 将解密后的内容写入缓存，后续调用可跳过下载和解密
-      // 为了不影响向上传递 stream，我们可以在写入缓存后重新获取 stream，或者将 stream 转为 broadcast。
-      // 因为这是 IO 文件，缓存也是写文件。 我们可以先写缓存，再从缓存读。
-      await database.storeFileStream(
+      // 因为这是 IO 文件，缓存也是写文件。 我们可以通过 storeFileFromPath 直接移动文件，主线程 0 开销。
+      await database.storeFileFromPath(
         cacheKey,
-        dataStream,
+        decryptedPath,
         DateTime.now().millisecondsSinceEpoch,
       );
       downloadedFile = await database.getFile(cacheKey);

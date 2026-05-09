@@ -69,6 +69,10 @@ class Client extends MatrixApi {
 
   DatabaseApi _database;
 
+  /// Global lock for in-flight file downloads and decryptions to prevent
+  /// duplicate work and cache corruption.
+  final Map<Uri, Future<MatrixFile>> inFlightDownloads = {};
+
   DatabaseApi get database => _database;
 
   set database(DatabaseApi db) {
@@ -1608,29 +1612,44 @@ class Client extends MatrixApi {
   /// the content. Use `Room.sendFileEvent()` for end to end encryption.
   @override
   Future<Uri> uploadContent(
-    Uint8List file, {
+    Stream<List<int>> file, {
+    int? contentLength,
     String? filename,
     String? contentType,
   }) async {
     final mediaConfig = await getConfig();
     final maxMediaSize = mediaConfig.mUploadSize;
-    if (maxMediaSize != null && maxMediaSize < file.lengthInBytes) {
-      throw FileTooBigMatrixException(file.lengthInBytes, maxMediaSize);
+    if (maxMediaSize != null && contentLength != null && maxMediaSize < contentLength) {
+      throw FileTooBigMatrixException(contentLength, maxMediaSize);
     }
 
-    contentType ??= lookupMimeType(filename ?? '', headerBytes: file);
-    final mxc = await super
-        .uploadContent(file, filename: filename, contentType: contentType);
+    contentType ??= lookupMimeType(filename ?? '');
 
     final database = this.database;
-    if (file.length <= database.maxFileSize) {
+    if (contentLength != null && contentLength <= database.maxFileSize) {
+      final bytes = Uint8List.fromList(
+        await file.fold<List<int>>([], (previous, element) => previous..addAll(element)),
+      );
+      final mxc = await super.uploadContent(
+        Stream.value(bytes),
+        contentLength: contentLength,
+        filename: filename,
+        contentType: contentType,
+      );
       await database.storeFileStream(
         mxc,
-        Stream.value(file),
+        Stream.value(bytes),
         DateTime.now().millisecondsSinceEpoch,
       );
+      return mxc;
     }
-    return mxc;
+
+    return await super.uploadContent(
+      file,
+      contentLength: contentLength,
+      filename: filename,
+      contentType: contentType,
+    );
   }
 
   /// Sends a typing notification and initiates a megolm session, if needed
@@ -1707,7 +1726,8 @@ class Client extends MatrixApi {
       return;
     }
     final uploadResp = await uploadContent(
-      file.bytes,
+      file.getStream(),
+      contentLength: file.size,
       filename: file.name,
       contentType: file.mimeType,
     );

@@ -29,15 +29,11 @@ mixin DatabaseFileStorage {
   Future<void> storeFileStream(Uri mxcUri, Stream<List<int>> stream, int time) async {
     final fileStorageLocation = this.fileStorageLocation;
     if (!supportsFileStoring || fileStorageLocation == null) {
-      Logs().v('[storeFileStream] File storing not supported. Draining stream for $mxcUri');
-      // Drain the stream to ensure side-effects (like decryption) can finish
       await stream.drain();
       return;
     }
 
     final file = _getFileFromMxc(mxcUri);
-    Logs().v('[storeFileStream] Start writing stream for $mxcUri to ${file.path}');
-
     final tmpFile = File('${file.path}_${DateTime.now().millisecondsSinceEpoch}_${randomAlphaNumeric(6)}.tmp');
     final sink = tmpFile.openWrite();
     var bytesWritten = 0;
@@ -48,18 +44,18 @@ mixin DatabaseFileStorage {
       }
       await sink.close();
       
-      Logs().v('[storeFileStream] Stream drained. Wrote $bytesWritten bytes to tmp file.');
-      
-      // If it exists, we overwrite it to ensure we don't leave half-written corrupt files.
-      // Rename is atomic and will overwrite the existing file on POSIX.
+      if (bytesWritten == 0) {
+        try {
+          if (await tmpFile.exists()) await tmpFile.delete();
+        } catch (_) {}
+        return;
+      }
+
       if (await file.exists()) {
-        Logs().v('[storeFileStream] Target file already exists. Deleting it to overwrite.');
         await file.delete();
       }
       await tmpFile.rename(file.path);
-      Logs().v('[storeFileStream] Successfully renamed tmp file to target file. Caching complete.');
     } catch (e) {
-      Logs().e('[storeFileStream] Error while writing stream to cache', e);
       try {
         await sink.close();
       } catch (_) {}
@@ -67,6 +63,32 @@ mixin DatabaseFileStorage {
         if (await tmpFile.exists()) await tmpFile.delete();
       } catch (_) {}
       rethrow;
+    }
+  }
+
+  Future<void> storeFileFromPath(Uri mxcUri, String path, int time) async {
+    final fileStorageLocation = this.fileStorageLocation;
+    if (!supportsFileStoring || fileStorageLocation == null) {
+      try {
+        await File(path).delete();
+      } catch (_) {}
+      return;
+    }
+
+    final file = _getFileFromMxc(mxcUri);
+    final srcFile = File(path);
+
+    try {
+      if (await file.exists()) {
+        await file.delete();
+      }
+      await srcFile.rename(file.path);
+    } catch (e) {
+      // Fallback to copy if rename fails (e.g. across different filesystems)
+      try {
+        await srcFile.copy(file.path);
+        await srcFile.delete();
+      } catch (_) {}
     }
   }
 

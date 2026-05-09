@@ -12,6 +12,12 @@ mixin DatabaseFileStorage {
     await stream.drain();
   }
 
+  Future<void> storeFileFromPath(Uri mxcUri, String path, int time) async {
+    try {
+      await File(path).delete();
+    } catch (_) {}
+  }
+
   Future<File?> getFile(Uri mxcUri) async {
     return null;
   }

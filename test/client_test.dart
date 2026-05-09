@@ -1536,7 +1536,8 @@ void main() {
     test('upload', () async {
       final client = await getClient();
       final response = await client.uploadContent(
-        Uint8List(0),
+        Stream.value(Uint8List(0)),
+        contentLength: 0,
         filename: 'file.jpeg',
       );
       expect(response.toString(), 'mxc://example.com/AQwafuaFswefuhsfAFAgsw');

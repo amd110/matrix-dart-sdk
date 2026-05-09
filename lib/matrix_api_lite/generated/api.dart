@@ -6053,7 +6053,8 @@ class Api {
   /// returns `content_uri`:
   /// The [`mxc://` URI](https://spec.matrix.org/unstable/client-server-api/#matrix-content-mxc-uris) to the uploaded content.
   Future<Uri> uploadContent(
-    Uint8List body, {
+    Stream<List<int>> body, {
+    int? contentLength,
     String? filename,
     String? contentType,
   }) async {
@@ -6063,10 +6064,11 @@ class Api {
         if (filename != null) 'filename': filename,
       },
     );
-    final request = Request('POST', baseUri!.resolveUri(requestUri));
+    final request = StreamedRequest('POST', baseUri!.resolveUri(requestUri));
     request.headers['authorization'] = 'Bearer ${bearerToken!}';
     if (contentType != null) request.headers['content-type'] = contentType;
-    request.bodyBytes = body;
+    if (contentLength != null) request.contentLength = contentLength;
+    body.forEach(request.sink.add).then((_) => request.sink.close()).catchError((e) => request.sink.addError(e));
     final response = await httpClient.send(request);
     final responseBody = await response.stream.toBytes();
     if (response.statusCode != 200) unexpectedResponse(response, responseBody);
@@ -6099,7 +6101,8 @@ class Api {
   Future<Map<String, Object?>> uploadContentToMXC(
     String serverName,
     String mediaId,
-    Uint8List body, {
+    Stream<List<int>> body, {
+    int? contentLength,
     String? filename,
     String? contentType,
   }) async {
@@ -6110,10 +6113,11 @@ class Api {
         if (filename != null) 'filename': filename,
       },
     );
-    final request = Request('PUT', baseUri!.resolveUri(requestUri));
+    final request = StreamedRequest('PUT', baseUri!.resolveUri(requestUri));
     request.headers['authorization'] = 'Bearer ${bearerToken!}';
     if (contentType != null) request.headers['content-type'] = contentType;
-    request.bodyBytes = body;
+    if (contentLength != null) request.contentLength = contentLength;
+    body.forEach(request.sink.add).then((_) => request.sink.close()).catchError((e) => request.sink.addError(e));
     final response = await httpClient.send(request);
     final responseBody = await response.stream.toBytes();
     if (response.statusCode != 200) unexpectedResponse(response, responseBody);
