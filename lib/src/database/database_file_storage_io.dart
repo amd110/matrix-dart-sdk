@@ -16,10 +16,14 @@ mixin DatabaseFileStorage {
     // Replace all special characters with underscores to avoid PathNotFoundException on Windows.
     final host = mxcUri.host.replaceAll('.', '_');
     final path = mxcUri.pathSegments.join('_');
+    // 'ext' query param carries the file extension so iOS AVPlayer can detect the codec.
+    final ext = mxcUri.queryParameters['ext'];
     final query = mxcUri.queryParameters.entries
+        .where((e) => e.key != 'ext')
         .map((entry) => '${entry.key}${entry.value}')
         .join('_');
-    final fileName = '${host}_${path}_$query';
+    final parts = [host, path, if (query.isNotEmpty) query];
+    final fileName = '${parts.join('_')}${ext != null ? '.$ext' : ''}';
     return File(
       join(Directory.fromUri(fileStorageLocation!).path, fileName),
     );

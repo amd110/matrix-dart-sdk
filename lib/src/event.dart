@@ -841,8 +841,15 @@ class Event extends MatrixEvent {
       throw ('Encryption is not enabled in your Client.');
     }
 
-    // 加密附件使用派生 key 缓存解密内容，避免将加密原文和解密内容混存
-    final cacheKey = isEncrypted ? mxcUrl.replace(queryParameters: {'decrypted': '1'}) : mxcUrl;
+    // 加密附件使用派生 key 缓存解密内容，避免将加密原文和解密内容混存。
+    // 'ext' 参数将 MIME 扩展名编码进 cache key，使缓存文件带有正确后缀（iOS AVPlayer 需要此扩展名识别编解码器）。
+    final ext = extensionFromMime(attachmentMimetype);
+    final extParam = ext != null ? {'ext': ext} : <String, String>{};
+    final cacheKey = isEncrypted
+        ? mxcUrl.replace(queryParameters: {'decrypted': '1', ...extParam})
+        : ext != null
+            ? mxcUrl.replace(queryParameters: extParam)
+            : mxcUrl;
 
     final cachedFile = await database.getFile(cacheKey);
     // 缓存命中（包括已解密的加密附件或已缓存的非加密附件）
