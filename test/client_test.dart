@@ -1538,8 +1538,10 @@ void main() {
     });
     test('upload', () async {
       final client = await getClient();
+      final tmpFile = File(join(Directory.systemTemp.path, 'file.jpeg'));
+      await tmpFile.writeAsBytes(Uint8List(0));
       final response = await client.uploadContent(
-        Stream.value(Uint8List(0)),
+        MatrixFile(name: 'file.jpeg', path: tmpFile.path),
         contentLength: 0,
         filename: 'file.jpeg',
       );
