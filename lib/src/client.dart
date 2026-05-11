@@ -20,14 +20,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:core';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:http/http.dart' as http;
-import 'package:mime/mime.dart';
-import 'package:random_string/random_string.dart';
-import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
-
 import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix/matrix_api_lite/generated/fixed_model.dart';
@@ -42,6 +37,9 @@ import 'package:matrix/src/utils/run_in_root.dart';
 import 'package:matrix/src/utils/sync_update_item_count.dart';
 import 'package:matrix/src/utils/try_get_push_rule.dart';
 import 'package:matrix/src/utils/versions_comparator.dart';
+import 'package:mime/mime.dart';
+import 'package:random_string/random_string.dart';
+import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
 
 typedef RoomSorter = int Function(Room a, Room b);
 
@@ -1612,7 +1610,7 @@ class Client extends MatrixApi {
   /// the content. Use `Room.sendFileEvent()` for end to end encryption.
   @override
   Future<Uri> uploadContent(
-    Stream<List<int>> file, {
+    Stream<List<int>> fileStream, {
     int? contentLength,
     String? filename,
     String? contentType,
@@ -1627,25 +1625,21 @@ class Client extends MatrixApi {
 
     final database = this.database;
     if (contentLength != null && contentLength <= database.maxFileSize) {
-      final bytes = Uint8List.fromList(
-        await file.fold<List<int>>([], (previous, element) => previous..addAll(element)),
-      );
       final mxc = await super.uploadContent(
-        Stream.value(bytes),
+        fileStream,
         contentLength: contentLength,
         filename: filename,
         contentType: contentType,
       );
       await database.storeFileStream(
         mxc,
-        Stream.value(bytes),
+        fileStream,
         DateTime.now().millisecondsSinceEpoch,
       );
       return mxc;
     }
-
     return await super.uploadContent(
-      file,
+      fileStream,
       contentLength: contentLength,
       filename: filename,
       contentType: contentType,
