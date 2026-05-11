@@ -1042,14 +1042,14 @@ class Room {
         (uploadThumbnail != null && thumbnailUploadResp == null)) {
       try {
         uploadResp = await client.uploadContent(
-          uploadFile.getStream(),
+          uploadFile,
           contentLength: uploadFile.size,
           filename: uploadFile.name,
           contentType: uploadFile.mimeType,
         );
         thumbnailUploadResp = uploadThumbnail != null
             ? await client.uploadContent(
-                uploadThumbnail.getStream(),
+                uploadThumbnail,
                 contentLength: uploadThumbnail.size,
                 filename: uploadThumbnail.name,
                 contentType: uploadThumbnail.mimeType,
@@ -2222,7 +2222,7 @@ class Room {
     final uploadResp = file == null
         ? null
         : await client.uploadContent(
-            file.getStream(),
+            file,
             contentLength: file.size,
             filename: file.name,
           );

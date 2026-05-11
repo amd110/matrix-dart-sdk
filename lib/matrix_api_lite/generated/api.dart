@@ -2,14 +2,18 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart';
+import 'package:http/http.dart' as http;
 import 'package:matrix/matrix_api_lite/generated/fixed_model.dart';
 import 'package:matrix/matrix_api_lite/generated/internal.dart';
 import 'package:matrix/matrix_api_lite/generated/model.dart';
 import 'package:matrix/matrix_api_lite/model/auth/authentication_data.dart';
 import 'package:matrix/matrix_api_lite/model/auth/authentication_identifier.dart';
 import 'package:matrix/matrix_api_lite/model/matrix_event.dart';
+import 'package:matrix/matrix_api_lite/model/matrix_exception.dart';
 import 'package:matrix/matrix_api_lite/model/matrix_keys.dart';
 import 'package:matrix/matrix_api_lite/model/sync_update.dart';
+
+import '../../src/utils/matrix_file.dart';
 
 // ignore_for_file: provide_deprecation_message
 
@@ -21,7 +25,13 @@ class Api {
   Api({Client? httpClient, this.baseUri, this.bearerToken}) : httpClient = httpClient ?? Client();
 
   Never unexpectedResponse(BaseResponse response, Uint8List body) {
-    throw Exception('http error response');
+    final httpResponse = http.Response.bytes(
+      body,
+      response.statusCode,
+      headers: response.headers,
+      request: response.request,
+    );
+    throw MatrixException(httpResponse);
   }
 
   Never bodySizeExceeded(int expected, int actual) {
@@ -6053,7 +6063,7 @@ class Api {
   /// returns `content_uri`:
   /// The [`mxc://` URI](https://spec.matrix.org/unstable/client-server-api/#matrix-content-mxc-uris) to the uploaded content.
   Future<Uri> uploadContent(
-    Stream<List<int>> body, {
+    MatrixFile file, {
     int? contentLength,
     String? filename,
     String? contentType,
@@ -6068,7 +6078,7 @@ class Api {
     request.headers['authorization'] = 'Bearer ${bearerToken!}';
     if (contentType != null) request.headers['content-type'] = contentType;
     if (contentLength != null) request.contentLength = contentLength;
-    body.forEach(request.sink.add).then((_) => request.sink.close()).catchError((e) => request.sink.addError(e));
+    request.sink.addStream(file.getStream()).then((_) => request.sink.close(), onError: request.sink.addError);
     final response = await httpClient.send(request);
     final responseBody = await response.stream.toBytes();
     if (response.statusCode != 200) unexpectedResponse(response, responseBody);
@@ -6117,7 +6127,7 @@ class Api {
     request.headers['authorization'] = 'Bearer ${bearerToken!}';
     if (contentType != null) request.headers['content-type'] = contentType;
     if (contentLength != null) request.contentLength = contentLength;
-    body.forEach(request.sink.add).then((_) => request.sink.close()).catchError((e) => request.sink.addError(e));
+    request.sink.addStream(body).then((_) => request.sink.close(), onError: request.sink.addError);
     final response = await httpClient.send(request);
     final responseBody = await response.stream.toBytes();
     if (response.statusCode != 200) unexpectedResponse(response, responseBody);

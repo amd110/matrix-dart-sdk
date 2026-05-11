@@ -1610,7 +1610,7 @@ class Client extends MatrixApi {
   /// the content. Use `Room.sendFileEvent()` for end to end encryption.
   @override
   Future<Uri> uploadContent(
-    Stream<List<int>> fileStream, {
+    MatrixFile matrixFile, {
     int? contentLength,
     String? filename,
     String? contentType,
@@ -1626,20 +1626,20 @@ class Client extends MatrixApi {
     final database = this.database;
     if (contentLength != null && contentLength <= database.maxFileSize) {
       final mxc = await super.uploadContent(
-        fileStream,
+        matrixFile,
         contentLength: contentLength,
         filename: filename,
         contentType: contentType,
       );
       await database.storeFileStream(
         mxc,
-        fileStream,
+        matrixFile.getStream(),
         DateTime.now().millisecondsSinceEpoch,
       );
       return mxc;
     }
     return await super.uploadContent(
-      fileStream,
+      matrixFile,
       contentLength: contentLength,
       filename: filename,
       contentType: contentType,
@@ -1720,7 +1720,7 @@ class Client extends MatrixApi {
       return;
     }
     final uploadResp = await uploadContent(
-      file.getStream(),
+      file,
       contentLength: file.size,
       filename: file.name,
       contentType: file.mimeType,
