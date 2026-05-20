@@ -36,25 +36,39 @@ Stream<List<int>> streamAesCtr({
   final cipher = Aes256Ctr(key: key, iv: iv);
 
   try {
-    final buffer = <int>[];
+    Uint8List? leftover;
     await for (final chunk in input) {
-      buffer.addAll(chunk);
+      final currentChunk =
+          chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
+      final Uint8List data;
+      if (leftover == null) {
+        data = currentChunk;
+      } else {
+        data = Uint8List(leftover.length + currentChunk.length)
+          ..setAll(0, leftover)
+          ..setAll(leftover.length, currentChunk);
+      }
 
-      // AES block size is 16 bytes. Some native bindings or CTR state machines
-      // discard the unused portion of a keystream block if updated with non-aligned chunks.
-      // To guarantee identical ciphertext/plaintext, we buffer and only update in multiples of 16 bytes.
-      if (buffer.length >= 16) {
-        final processLength = (buffer.length ~/ 16) * 16;
-        final processChunk = Uint8List.fromList(buffer.sublist(0, processLength));
-        buffer.removeRange(0, processLength);
+      final processLength = (data.length ~/ 16) * 16;
+      if (processLength > 0) {
+        yield cipher.update(
+          Uint8List.view(data.buffer, data.offsetInBytes, processLength),
+        );
+      }
 
-        yield cipher.update(processChunk);
+      if (data.length > processLength) {
+        leftover = Uint8List.view(
+          data.buffer,
+          data.offsetInBytes + processLength,
+          data.length - processLength,
+        );
+      } else {
+        leftover = null;
       }
     }
 
-    // Process any remaining bytes (the final chunk can be unaligned)
-    if (buffer.isNotEmpty) {
-      yield cipher.update(Uint8List.fromList(buffer));
+    if (leftover != null && leftover.isNotEmpty) {
+      yield cipher.update(leftover);
     }
   } finally {
     cipher.finalize();
