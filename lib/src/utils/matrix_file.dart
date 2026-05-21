@@ -50,7 +50,18 @@ class MatrixFile {
       nativeImplementations.encryptFile(File(path));
 
   /// Retrieves the stream of the file content.
-  Stream<List<int>> getStream() => File(path).openRead();
+  Stream<List<int>> getStream() async* {
+    // Throttled stream to prevent main thread TLS encryption from starving the Flutter UI.
+    // iOS SecureSocket TLS encryption on the main thread causes severe lag (100% CPU)
+    // if we pump a large video file as fast as the disk/network allows.
+    final stream = File(path).openRead();
+    await for (final chunk in stream) {
+      yield chunk;
+      // Yield to the event loop for 1 millisecond after every chunk (64KB).
+      // This caps the upload stream processing and gives the UI thread guaranteed time to render.
+      await Future.delayed(const Duration(milliseconds: 1));
+    }
+  }
 
   /// Retrieves the file content as a single [Uint8List] byte array.
   Future<Uint8List> getBytes() => File(path).readAsBytes();

@@ -1041,20 +1041,20 @@ class Room {
     while (uploadResp == null ||
         (uploadThumbnail != null && thumbnailUploadResp == null)) {
       try {
-        uploadResp = await client.uploadContent(
+        uploadResp ??= await client.uploadContent(
           uploadFile,
           contentLength: uploadFile.size,
           filename: uploadFile.name,
           contentType: uploadFile.mimeType,
         );
-        thumbnailUploadResp = uploadThumbnail != null
-            ? await client.uploadContent(
-                uploadThumbnail,
-                contentLength: uploadThumbnail.size,
-                filename: uploadThumbnail.name,
-                contentType: uploadThumbnail.mimeType,
-              )
-            : null;
+        if (uploadThumbnail != null) {
+          thumbnailUploadResp ??= await client.uploadContent(
+            uploadThumbnail,
+            contentLength: uploadThumbnail.size,
+            filename: uploadThumbnail.name,
+            contentType: uploadThumbnail.mimeType,
+          );
+        }
       } on MatrixException catch (_) {
         syncUpdate.rooms!.join!.values.first.timeline!.events!.first
             .unsigned![messageSendingStatusKey] = EventStatus.error.intValue;

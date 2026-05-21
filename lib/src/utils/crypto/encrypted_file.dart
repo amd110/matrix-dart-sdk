@@ -74,10 +74,10 @@ Future<EncryptedFile> encryptFile(
   );
 
   try {
-    await for (final chunk in encryptedStream) {
+    await sink.addStream(encryptedStream.map((chunk) {
       sha256Sink.add(chunk);
-      sink.add(chunk);
-    }
+      return chunk;
+    }));
     await sink.close();
     sha256Sink.close();
 
@@ -127,9 +127,7 @@ Future<File> decryptFile(
   final sink = tempFile.openWrite();
 
   try {
-    await for (final chunk in decryptedStream) {
-      sink.add(chunk);
-    }
+    await sink.addStream(decryptedStream);
     await sink.close();
     return tempFile;
   } catch (e) {

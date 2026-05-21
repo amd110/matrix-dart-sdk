@@ -54,6 +54,8 @@ Stream<List<int>> streamAesCtr({
         yield cipher.update(
           Uint8List.view(data.buffer, data.offsetInBytes, processLength),
         );
+        // Yield to event loop to prevent main thread lockup if running without Isolate.
+        await Future.delayed(Duration.zero);
       }
 
       if (data.length > processLength) {

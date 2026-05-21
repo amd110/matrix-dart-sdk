@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:matrix/matrix.dart';
@@ -42,10 +43,10 @@ mixin DatabaseFileStorage {
     final sink = tmpFile.openWrite();
     var bytesWritten = 0;
     try {
-      await for (final chunk in stream) {
-        sink.add(chunk);
+      await sink.addStream(stream.map((chunk) {
         bytesWritten += chunk.length;
-      }
+        return chunk;
+      }));
       await sink.close();
       
       if (bytesWritten == 0) {
@@ -134,10 +135,12 @@ mixin DatabaseFileStorage {
     }
 
     final targetFile = _getFileFromMxc(mxcUri);
-    
-    // If the file already exists, we can return it immediately.
+
+    // 文件已存在时必须先 drain stream，否则底层 HTTP socket 无法释放，
+    // 会持续占用 IO 线程直到连接超时（defaultNetworkRequestTimeout），导致 CPU 持续高。
     if (await targetFile.exists()) {
-       return targetFile;
+      unawaited(stream.drain<void>().catchError((_) {}));
+      return targetFile;
     }
 
     final tmpFile = File(
@@ -150,12 +153,12 @@ mixin DatabaseFileStorage {
     final sink = tmpFile.openWrite();
     try {
       var received = 0;
-      await for (final chunk in stream) {
+      await sink.addStream(stream.map((chunk) {
         cancellationToken?.throwIfCancelled();
-        sink.add(chunk);
         received += chunk.length;
         onProgress?.call(received);
-      }
+        return chunk;
+      }));
       await sink.close();
       
       // Rename temporary file to the final target file.
