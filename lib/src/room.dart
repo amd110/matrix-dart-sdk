@@ -31,6 +31,7 @@ import 'package:matrix/src/utils/file_send_request_credentials.dart';
 import 'package:matrix/src/utils/markdown.dart';
 import 'package:matrix/src/utils/marked_unread.dart';
 import 'package:matrix/src/utils/space_child.dart';
+import 'package:mime/mime.dart';
 
 /// max PDU size for server to accept the event with some buffer incase the server adds unsigned data f.ex age
 /// https://spec.matrix.org/v1.9/client-server-api/#size-limits
@@ -1130,9 +1131,25 @@ class Room {
       threadLastEventId: threadLastEventId,
       displayPendingEvent: displayPendingEvent,
     );
-    await client.database.deleteFile(
-      Uri(scheme: 'cache', host: 'file', path: txid),
-    );
+
+    // 上传成功后将临时缓存文件直接移至 downloadAndDecryptAttachment 会命中的正式 cache key，
+    // 首次播放时跳过下载和解密，直接读本地缓存。
+    // 临时文件存的是加密前的原始内容，因此对加密/非加密房间均可直接作为解密缓存使用。
+    final tempFileCacheUri = Uri(scheme: 'cache', host: 'file', path: txid);
+    try {
+      final ext = extensionFromMime(file.mimeType);
+      final extParam = ext != null ? {'ext': ext} : <String, String>{};
+      final playbackCacheKey = encryptedFile != null
+          ? uploadResp.replace(queryParameters: {'decrypted': '1', ...extParam})
+          : ext != null
+              ? uploadResp.replace(queryParameters: extParam)
+              : uploadResp;
+      await client.database.storeCacheFileAs(tempFileCacheUri, playbackCacheKey);
+    } catch (e) {
+      Logs().w('sendFileEvent: failed to promote temp cache to playback cache', e);
+      await client.database.deleteFile(tempFileCacheUri);
+    }
+
     if (thumbnail != null) {
       await client.database.deleteFile(
         Uri(scheme: 'cache', host: 'thumbnail', path: txid),

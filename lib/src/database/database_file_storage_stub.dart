@@ -30,6 +30,10 @@ mixin DatabaseFileStorage {
     return false;
   }
 
+  Future<void> storeCacheFileAs(Uri srcUri, Uri dstUri) async {
+    // stub: 不支持文件存储，无操作
+  }
+
   /// Stub: never called because [supportsFileStoring] is always false on web.
   Future<File> downloadToFileViaStream(
     Stream<List<int>> stream,

@@ -136,9 +136,10 @@ abstract class DatabaseApi {
 
   Future<bool> deleteFile(Uri mxcUri);
 
-  Future storeSyncFilterId(
-    String syncFilterId,
-  );
+  /// 将 [srcUri] 对应的缓存文件零拷贝移动到 [dstUri] 的缓存路径。
+  Future<void> storeCacheFileAs(Uri srcUri, Uri dstUri);
+
+  Future storeSyncFilterId(String syncFilterId);
 
   Future storeAccountData(String type, Map<String, Object?> content);
 

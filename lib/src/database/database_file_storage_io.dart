@@ -107,6 +107,28 @@ mixin DatabaseFileStorage {
     return null;
   }
 
+  /// 将 [srcUri] 对应的缓存文件重命名为 [dstUri] 的缓存路径，零拷贝移动。
+  /// 用于发送完成后直接将临时上传缓存提升为 playback 缓存，首播时跳过下载/解密。
+  Future<void> storeCacheFileAs(Uri srcUri, Uri dstUri) async {
+    final fileStorageLocation = this.fileStorageLocation;
+    if (!supportsFileStoring || fileStorageLocation == null) return;
+
+    final srcFile = _getFileFromMxc(srcUri);
+    if (!await srcFile.exists()) return;
+
+    final dstFile = _getFileFromMxc(dstUri);
+    try {
+      if (await dstFile.exists()) await dstFile.delete();
+      await srcFile.rename(dstFile.path);
+    } catch (_) {
+      // rename 跨卷失败时回退到 copy+delete
+      try {
+        await srcFile.copy(dstFile.path);
+        await srcFile.delete();
+      } catch (_) {}
+    }
+  }
+
   Future<bool> deleteFile(Uri mxcUri) async {
     final fileStorageLocation = this.fileStorageLocation;
     if (!supportsFileStoring || fileStorageLocation == null) return false;
