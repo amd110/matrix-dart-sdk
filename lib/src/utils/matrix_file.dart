@@ -96,8 +96,7 @@ class MatrixFile {
     String? mimeType,
     required String path,
   }) {
-    final resolvedMime =
-        mimeType ?? lookupMimeType(name) ?? 'application/octet-stream';
+    final resolvedMime = mimeType ?? lookupMimeType(name) ?? 'application/octet-stream';
     final msgType = msgTypeFromMime(resolvedMime);
     if (msgType == MessageTypes.Image) {
       return MatrixImageFile(name: name, mimeType: mimeType, path: path);
@@ -115,13 +114,20 @@ class MatrixFile {
 class MatrixImageFile extends MatrixFile {
   MatrixImageFile({
     required super.name,
-    super.mimeType,
+    String? mimeType,
     required super.path,
     int? width,
     int? height,
     this.blurhash,
   })  : _width = width,
-        _height = height;
+        _height = height,
+        super(
+          mimeType: (mimeType == null || !mimeType.toLowerCase().startsWith('image/'))
+              ? (lookupMimeType(name)?.toLowerCase().startsWith('image/') == true
+                  ? lookupMimeType(name)
+                  : 'image/jpeg')
+              : mimeType,
+        );
 
   /// Creates a new image file, writes any re-encoded bytes back to [path],
   /// and populates width/height/blurhash metadata.
@@ -185,9 +191,11 @@ class MatrixImageFile extends MatrixFile {
   }
 
   int? _width;
+
   int? get width => _width;
 
   int? _height;
+
   int? get height => _height;
 
   void setImageSizeIfNull({required int? width, required int? height}) {
@@ -245,7 +253,7 @@ class MatrixImageFile extends MatrixFile {
     return MatrixImageFile(
       path: thumbPath,
       name: name,
-      mimeType: mimeType,
+      mimeType: 'image/jpeg',
       width: resizedData.width,
       height: resizedData.height,
       blurhash: resizedData.blurhash,
@@ -286,9 +294,8 @@ class MatrixImageFile extends MatrixFile {
       height: resized.height,
       originalHeight: image.height,
       originalWidth: image.width,
-      blurhash: arguments.calcBlurhash
-          ? BlurHash.encode(resized, numCompX: 4, numCompY: 3).hash
-          : null,
+      blurhash:
+          arguments.calcBlurhash ? BlurHash.encode(resized, numCompX: 4, numCompY: 3).hash : null,
     );
   }
 }
@@ -408,5 +415,6 @@ class MatrixAudioFile extends MatrixFile {
 }
 
 extension ToMatrixFile on EncryptedFile {
-  MatrixFile toMatrixFile() => MatrixFile(name: 'crypt', path: path);
+  MatrixFile toMatrixFile({String? mimeType}) =>
+      MatrixFile(name: 'crypt', path: path, mimeType: mimeType);
 }

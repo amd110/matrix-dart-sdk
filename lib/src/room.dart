@@ -1023,13 +1023,14 @@ class Room {
       encryptedFile = await file.encrypt(
         nativeImplementations: client.nativeImplementations,
       );
-      uploadFile = encryptedFile.toMatrixFile();
+      uploadFile = encryptedFile.toMatrixFile(mimeType: file.mimeType);
 
       if (thumbnail != null) {
         encryptedThumbnail = await thumbnail.encrypt(
           nativeImplementations: client.nativeImplementations,
         );
-        uploadThumbnail = encryptedThumbnail.toMatrixFile();
+        uploadThumbnail =
+            encryptedThumbnail.toMatrixFile(mimeType: thumbnail.mimeType);
       }
     }
     Uri? uploadResp, thumbnailUploadResp;
