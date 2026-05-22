@@ -74,10 +74,12 @@ Future<EncryptedFile> encryptFile(
   );
 
   try {
-    await sink.addStream(encryptedStream.map((chunk) {
-      sha256Sink.add(chunk);
-      return chunk;
-    }));
+    await sink.addStream(
+      encryptedStream.map((chunk) {
+        sha256Sink.add(chunk);
+        return chunk;
+      }),
+    );
     await sink.close();
     sha256Sink.close();
 
@@ -90,8 +92,12 @@ Future<EncryptedFile> encryptFile(
       sha256: base64.encode(finalDigest!.bytes).replaceAll('=', ''),
     );
   } catch (e) {
-    try { await sink.close(); } catch (_) {}
-    try { await tempFile.delete(); } catch (_) {}
+    try {
+      await sink.close();
+    } catch (_) {}
+    try {
+      await tempFile.delete();
+    } catch (_) {}
     rethrow;
   }
 }
@@ -106,19 +112,23 @@ Future<File> decryptFile(
 }) async {
   final key = base64decodeUnpadded(base64.normalize(input.k));
   final iv = base64decodeUnpadded(base64.normalize(input.iv));
-
-  final encryptedBytes = await File(input.path).readAsBytes();
   final expectedHash = base64.normalize(input.sha256);
-  final actualHash = base64.encode(dart_crypto.sha256.convert(encryptedBytes).bytes);
-  if (actualHash != expectedHash) {
-    throw Exception('Encrypted file integrity check failed: SHA-256 mismatch');
-  }
 
-  final decryptedStream = streamAesCtr(
-    input: Stream.value(encryptedBytes),
-    key: key,
-    iv: iv,
+  dart_crypto.Digest? finalDigest;
+  final sha256Sink = dart_crypto.sha256.startChunkedConversion(
+    ChunkedConversionSink<dart_crypto.Digest>.withCallback((digests) {
+      finalDigest = digests.single;
+    }),
   );
+
+  // Stream encrypted bytes through SHA256 and cipher in a single pass,
+  // avoiding loading the entire file into memory.
+  final encryptedStream = File(input.path).openRead().map((chunk) {
+    sha256Sink.add(chunk);
+    return chunk;
+  });
+
+  final decryptedStream = streamAesCtr(input: encryptedStream, key: key, iv: iv);
 
   final actualTempDir = tempDir ?? Directory.systemTemp;
   final tempFile = File(
@@ -129,10 +139,23 @@ Future<File> decryptFile(
   try {
     await sink.addStream(decryptedStream);
     await sink.close();
+    sha256Sink.close();
+
+    if (finalDigest == null) throw Exception('Failed to calculate SHA256 digest');
+
+    final actualHash = base64.encode(finalDigest!.bytes);
+    if (actualHash != expectedHash) {
+      throw Exception('Encrypted file integrity check failed: SHA-256 mismatch');
+    }
+
     return tempFile;
   } catch (e) {
-    try { await sink.close(); } catch (_) {}
-    try { await tempFile.delete(); } catch (_) {}
+    try {
+      await sink.close();
+    } catch (_) {}
+    try {
+      await tempFile.delete();
+    } catch (_) {}
     rethrow;
   }
 }
