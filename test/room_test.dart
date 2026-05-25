@@ -35,6 +35,7 @@ class _MockNativeImplementations extends NativeImplementations {
   Future<EncryptedFile> encryptFile(
     File file, {
     bool retryInDummy = true,
+    CancellationToken? cancellationToken,
   }) async {
     return EncryptedFile(
       path: file.path,

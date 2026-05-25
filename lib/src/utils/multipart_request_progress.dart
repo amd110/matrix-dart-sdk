@@ -17,12 +17,24 @@ class DownloadCancelledException implements Exception {
 /// 操作会在下一个取消检查点抛出 [DownloadCancelledException]。
 class CancellationToken {
   bool _cancelled = false;
+  Completer<void>? _completer;
 
   /// 是否已调用过 [cancel]。
   bool get isCancelled => _cancelled;
 
+  /// 取消时完成的 Future，用于 await 竞争场景。
+  Future<void> get whenCancelled {
+    _completer ??= Completer<void>();
+    if (_cancelled) _completer!.complete();
+    return _completer!.future;
+  }
+
   /// 请求取消所有正在监听此 token 的操作。
-  void cancel() => _cancelled = true;
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    _completer?.complete();
+  }
 
   /// 若已取消则抛出 [DownloadCancelledException]。
   void throwIfCancelled() {

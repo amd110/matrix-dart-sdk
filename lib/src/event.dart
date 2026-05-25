@@ -911,7 +911,10 @@ class Event extends MatrixEvent {
         k: fileMap.tryGetMap<String, Object?>('key')!.tryGet<String>('k')!,
         sha256: fileMap.tryGetMap<String, Object?>('hashes')!.tryGet<String>('sha256')!,
       );
-      final decryptedFile = await room.client.nativeImplementations.decryptFile(encryptedFile);
+      final decryptedFile = await room.client.nativeImplementations.decryptFile(
+        encryptedFile,
+        cancellationToken: cancellationToken,
+      );
       final decryptedPath = decryptedFile.path;
 
       // 将解密后的内容写入缓存，后续调用可跳过下载和解密
