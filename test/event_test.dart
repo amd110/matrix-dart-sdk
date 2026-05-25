@@ -3078,11 +3078,14 @@ void main() async {
         // 验证事件有 transactionId
         expect(event.transactionId, txid);
 
-        // 简单验证：缓存不存在时调用不会抛出异常
-        // （完整验证需要 mock 数据库和文件系统）
-        expect(() => event.downloadAndDecryptAttachment(
-          fromLocalStoreOnly: true,
-        ), throwsA(isA<Object>())); // 因为没有真实的缓存文件
+        // 测试缓存不存在时会抛出异常
+        // fromLocalStoreOnly=true 时，如果本地缓存不存在则抛出异常
+        expect(
+          () async => await event.downloadAndDecryptAttachment(
+            fromLocalStoreOnly: true,
+          ),
+          throwsA(isA<String>()),
+        );
 
         await testClient.dispose(closeDatabase: true);
       },
