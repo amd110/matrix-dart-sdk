@@ -835,8 +835,13 @@ class Event extends MatrixEvent {
     try {
       final localFile = await _getCachedFile(getThumbnail: getThumbnail);
       if (localFile != null) return localFile;
-    } catch (_) {
-      // 缓存查询失败时继续使用标准流程
+    } catch (e, s) {
+      // 缓存查询失败时记录并继续使用标准流程下载
+      Logs().w(
+        '[downloadAndDecryptAttachment] Cache query failed, falling back to download: $e',
+        e,
+        s,
+      );
     }
     final database = room.client.database;
     getThumbnail = mxcUrl != attachmentMxcUrl;
