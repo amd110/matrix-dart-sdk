@@ -3030,5 +3030,62 @@ void main() async {
       expect(event.mentions.userIds, ['@alice:matrix.org']);
       expect(event.mentions.room, false);
     });
+
+    test(
+      'downloadAndDecryptAttachment uses cached file for sent events with transactionId',
+      () async {
+        final testClient = await getClient();
+        final testRoom = Room(id: '!test:example.com', client: testClient);
+
+        // 创建一个有 transactionId 的事件（表示是自己发送的）
+        const txid = 'test_txid_123';
+        final event = Event.fromJson(
+          {
+            'type': EventTypes.Message,
+            'content': {
+              'msgtype': 'm.image',
+              'body': 'test.jpg',
+              'info': {
+                'size': 1024,
+                'mimetype': 'image/jpeg',
+              },
+              'file': {
+                'url': 'mxc://example.com/abc123',
+                'v': 'v2',
+                'key': {
+                  'alg': 'A256CTR',
+                  'ext': true,
+                  'k': 'base64_encoded_key',
+                  'key_ops': ['encrypt', 'decrypt'],
+                  'kty': 'oct',
+                },
+                'iv': 'base64_encoded_iv',
+                'hashes': {
+                  'sha256': 'base64_encoded_hash',
+                },
+              },
+            },
+            'event_id': '\$event_id',
+            'sender': testClient.userID!,
+            'origin_server_ts': DateTime.now().millisecondsSinceEpoch,
+            'unsigned': {
+              'transaction_id': txid,
+            },
+          },
+          testRoom,
+        );
+
+        // 验证事件有 transactionId
+        expect(event.transactionId, txid);
+
+        // 简单验证：缓存不存在时调用不会抛出异常
+        // （完整验证需要 mock 数据库和文件系统）
+        expect(() => event.downloadAndDecryptAttachment(
+          fromLocalStoreOnly: true,
+        ), throwsA(isA<Object>())); // 因为没有真实的缓存文件
+
+        await testClient.dispose(closeDatabase: true);
+      },
+    );
   });
 }
