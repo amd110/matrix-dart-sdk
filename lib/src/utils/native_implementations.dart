@@ -190,13 +190,18 @@ Future<void> _persistentIsolateMain(_NativeIsolateInitArgs args) async {
 
   // 收集已取消的请求 id；在实际执行前检查，跳过已取消的任务。
   final cancelledIds = <int>{};
+  var lastStartedId = 0;
 
   await for (final message in receivePort) {
     if (message is _CancelRequest) {
-      cancelledIds.add(message.id);
+      if (message.id > lastStartedId) {
+        cancelledIds.add(message.id);
+      }
       continue;
     }
     if (message is! _NativeRequest) continue;
+
+    lastStartedId = message.id;
 
     // 执行前检查取消标志：已取消则直接回复 DownloadCancelledException，不执行加解密。
     if (cancelledIds.remove(message.id)) {
@@ -421,6 +426,7 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
           if (!completer.isCompleted) {
             completer.completeError(const DownloadCancelledException());
           }
+          replyPort.close();
         });
       }
 
@@ -430,9 +436,9 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
       // - 取消：上方 whenCancelled 回调完成 completer
       replyPort.listen(
         (msg) {
-          replyPort.close();
           _pendingCompleters.remove(completer);
           if (!completer.isCompleted) completer.complete(msg);
+          replyPort.close();
         },
         onDone: () {
           // replyPort 被外部关闭（如 dispose）时确保 completer 得到处理。

@@ -307,6 +307,15 @@ void main() {
         reason: '排队中的请求被取消后应抛出 DownloadCancelledException',
       );
     });
+
+    test('CancellationToken whenCancelled 连续/并发获取不会抛出 Completer StateError', () async {
+      final token = CancellationToken();
+      token.cancel();
+
+      // 连续/并发获取多次 whenCancelled 都不应该触发 StateError
+      await expectLater(token.whenCancelled, completes);
+      await expectLater(token.whenCancelled, completes);
+    });
   }); // end group 生命周期
 
   // ─────────────────────────────────────────────────────────────────────────

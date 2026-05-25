@@ -25,7 +25,7 @@ class CancellationToken {
   /// 取消时完成的 Future，用于 await 竞争场景。
   Future<void> get whenCancelled {
     _completer ??= Completer<void>();
-    if (_cancelled) _completer!.complete();
+    if (_cancelled && !_completer!.isCompleted) _completer!.complete();
     return _completer!.future;
   }
 
