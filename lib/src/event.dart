@@ -830,10 +830,10 @@ class Event extends MatrixEvent {
     if (![EventTypes.Message, EventTypes.Sticker].contains(type)) {
       throw ("This event has the type '$type' and so it can't contain an attachment.");
     }
-    if (!status.isSent) {
-      final localFile = await _getCachedFile(getThumbnail: getThumbnail);
-      if (localFile != null) return localFile;
-    }
+    // 优先查询 transactionId 对应的缓存（自己发送的事件中的原始文件）
+    // 无论事件状态是 sending 还是 sent，都能使用本地缓存，避免不必要的下载和解密
+    final localFile = await _getCachedFile(getThumbnail: getThumbnail);
+    if (localFile != null) return localFile;
     final database = room.client.database;
     getThumbnail = mxcUrl != attachmentMxcUrl;
     final isEncrypted = getThumbnail ? isThumbnailEncrypted : isAttachmentEncrypted;
