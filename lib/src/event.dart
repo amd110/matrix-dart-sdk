@@ -430,7 +430,7 @@ class Event extends MatrixEvent {
   Future<MatrixFile?> _getCachedFile({bool getThumbnail = false}) async {
     if (transactionId == null) return null;
 
-    final filename = content.tryGet<String>('filename')!;
+    final filename = content.tryGet<String>('filename') ?? body;
 
     if (getThumbnail) {
       final thumbnailFile = await room.client.database.getFile(
@@ -459,10 +459,13 @@ class Event extends MatrixEvent {
       ),
     );
     if (fileFile == null) {
-      await cancelSend();
-      throw Exception('Can not try to send again. File is no longer cached.');
+      if (!status.isSent) {
+        await cancelSend();
+        throw Exception('Can not try to send again. File is no longer cached.');
+      }
+      return null;
     }
-    
+
     return switch (messageType) {
       MessageTypes.Video => MatrixVideoFile(
           path: fileFile.path,
