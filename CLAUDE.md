@@ -19,6 +19,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Matrix API Lite**（`lib/matrix_api_lite.dart`）：Matrix 客户端-服务器 API 的底层 HTTP 绑定，大部分由规范自动生成
 - **VoIP**（`lib/src/voip/`）：支持 WebRTC 的通话会话管理（mesh 和 LiveKit 后端）
 - **MSC 扩展**（`lib/msc_extensions/`）：Matrix 规范变更提案（投票、Widget、OIDC 等）
+- **Utils**（`lib/src/utils/`）：工具类集合，包括 `native_implementations.dart`（Isolate 卸载）、`matrix_file.dart`（文件封装）、`pushrule_evaluator.dart`（推送规则）、`multilock.dart`（并发锁）、`cached_stream_controller.dart`（内存缓存）等
+- **Models**（`lib/src/models/`）：数据模型，包括 `receipts.dart`、`timeline_chunk.dart`、`power_level.dart` 等
 - **主导出**（`lib/matrix.dart`）：SDK 的公开 API 统一入口
 
 ## 开发命令
@@ -36,6 +38,17 @@ pub global activate coverage  # 用于覆盖率报告（CI 会自动执行）
 dart format lib test      # 格式化代码（CI 必须通过）
 dart analyze              # 运行静态分析（包含 famedly_dart_lints）
 import_sorter --set-exit-if-changed .  # 排序导入（CI 强制执行）
+```
+
+### 运行测试
+
+```bash
+dart test                                          # 运行所有测试
+dart test test/client_test.dart                    # 运行单个测试文件
+dart test --name "test name"                       # 按名称过滤运行
+dart test -x olm                                   # 跳过 OLM 测试（不需要 vodozemac）
+dart test -t olm                                   # 只运行 OLM 测试（需要配置 vodozemac）
+./scripts/test.sh                                  # 运行全量测试并生成覆盖率报告
 ```
 
 ### CI 工作流
