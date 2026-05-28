@@ -38,38 +38,6 @@ dart analyze              # 运行静态分析（包含 famedly_dart_lints）
 import_sorter --set-exit-if-changed .  # 排序导入（CI 强制执行）
 ```
 
-### 测试
-
-```bash
-# 以并发方式运行所有测试（默认并发数为 CPU 核心数）
-dart test --concurrency=$(getconf _NPROCESSORS_ONLN) test
-
-# 运行特定测试文件
-dart test test/client_test.dart
-
-# 跳过需要环境配置的 E2EE/OLM 测试
-dart test --concurrency=$(getconf _NPROCESSORS_ONLN) test -x olm
-
-# 仅运行 OLM 相关测试（需提前配置 E2EE 环境）
-dart test --concurrency=$(getconf _NPROCESSORS_ONLN) test -t olm
-
-# 生成覆盖率报告（同时清理生成的文件）
-./scripts/test.sh
-
-# Web 平台测试（需要 Chrome）
-dart test test/box_test.dart --platform chrome
-
-# E2EE 集成测试（需启动本地 homeserver：Synapse/Dendrite/Conduit）
-# 详见 scripts/integration-*.sh
-export HOMESERVER_IMPLEMENTATION=synapse  # 或 dendrite/conduit
-scripts/integration-server-${HOMESERVER_IMPLEMENTATION}.sh 2>&1 > /dev/null &
-source scripts/integration-create-environment-variables.sh
-scripts/integration-prepare-homeserver.sh
-dart pub get
-scripts/prepare_vodozemac.sh
-dart test test_driver/matrixsdk_test.dart -p vm
-```
-
 ### CI 工作流
 
 仓库使用 GitHub Actions（`.github/workflows/integrate.yml`）：

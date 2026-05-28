@@ -22,6 +22,14 @@ class Api {
   Uri? baseUri;
   String? bearerToken;
 
+  /// 可选的异步 JSON 解码器。
+  /// 为 null 时直接调用 [jsonDecode]（默认行为）。
+  /// Flutter 用户可注入基于 [Isolate.run] 的实现以避免主线程阻塞：
+  /// ```dart
+  /// client.asyncJsonDecoder = (raw) => Isolate.run(() => jsonDecode(raw));
+  /// ```
+  Future<dynamic> Function(String)? asyncJsonDecoder;
+
   Api({Client? httpClient, this.baseUri, this.bearerToken}) : httpClient = httpClient ?? Client();
 
   Never unexpectedResponse(BaseResponse response, Uint8List body) {
@@ -5162,7 +5170,9 @@ class Api {
     final responseBody = await response.stream.toBytes();
     if (response.statusCode != 200) unexpectedResponse(response, responseBody);
     final responseString = utf8.decode(responseBody);
-    final json = jsonDecode(responseString);
+    final dynamic json = asyncJsonDecoder != null
+        ? await asyncJsonDecoder!(responseString)
+        : jsonDecode(responseString);
     return SyncUpdate.fromJson(json as Map<String, Object?>);
   }
 
