@@ -49,6 +49,8 @@ class Logs {
   Level level = Level.info;
   bool nativeColors = true;
 
+  // 仅保留最近 N 条日志，防止长时间运行后 OOM
+  static const int _maxOutputEvents = 500;
   final List<LogEvent> outputEvents = [];
 
   /// Callback to receive log events for external logging (e.g., Sentry).
@@ -58,12 +60,15 @@ class Logs {
   Logs._internal();
 
   void addLogEvent(LogEvent logEvent) {
-    outputEvents.add(logEvent);
-
-    // Call external logger callback if set
+    // onLog 回调在 level 过滤前执行，确保外部日志系统（如 Crashlytics）收到全部事件
     onLog?.call(logEvent);
 
     if (logEvent.level.index <= level.index) {
+      // 只存储达到当前 level 阈值的事件，避免 debug 日志在生产环境中无限累积
+      if (outputEvents.length >= _maxOutputEvents) {
+        outputEvents.removeAt(0);
+      }
+      outputEvents.add(logEvent);
       logEvent.printOut();
     }
   }
