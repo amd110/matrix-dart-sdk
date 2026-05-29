@@ -1663,90 +1663,95 @@ class MatrixSdkDatabase extends DatabaseApi with DatabaseFileStorage {
       await clear();
       await open();
       final json = Map.from(jsonDecode(export)).cast<String, Map>();
-      for (final key in json[_clientBoxName]!.keys) {
-        await _clientBox.put(key, json[_clientBoxName]![key]);
-      }
-      for (final key in json[_accountDataBoxName]!.keys) {
-        await _accountDataBox.put(key, json[_accountDataBoxName]![key]);
-      }
-      for (final key in json[_roomsBoxName]!.keys) {
-        await _roomsBox.put(key, json[_roomsBoxName]![key]);
-      }
-      for (final key in json[_preloadRoomStateBoxName]!.keys) {
-        await _preloadRoomStateBox.put(
-          key,
-          json[_preloadRoomStateBoxName]![key],
-        );
-      }
-      for (final key in json[_nonPreloadRoomStateBoxName]!.keys) {
-        await _nonPreloadRoomStateBox.put(
-          key,
-          json[_nonPreloadRoomStateBoxName]![key],
-        );
-      }
-      for (final key in json[_roomMembersBoxName]!.keys) {
-        await _roomMembersBox.put(key, json[_roomMembersBoxName]![key]);
-      }
-      for (final key in json[_toDeviceQueueBoxName]!.keys) {
-        await _toDeviceQueueBox.put(key, json[_toDeviceQueueBoxName]![key]);
-      }
-      for (final key in json[_roomAccountDataBoxName]!.keys) {
-        await _roomAccountDataBox.put(key, json[_roomAccountDataBoxName]![key]);
-      }
-      for (final key in json[_inboundGroupSessionsBoxName]!.keys) {
-        await _inboundGroupSessionsBox.put(
-          key,
-          json[_inboundGroupSessionsBoxName]![key],
-        );
-      }
-      for (final key in json[_inboundGroupSessionsUploadQueueBoxName]!.keys) {
-        await _inboundGroupSessionsUploadQueueBox.put(
-          key,
-          json[_inboundGroupSessionsUploadQueueBoxName]![key],
-        );
-      }
-      for (final key in json[_outboundGroupSessionsBoxName]!.keys) {
-        await _outboundGroupSessionsBox.put(
-          key,
-          json[_outboundGroupSessionsBoxName]![key],
-        );
-      }
-      for (final key in json[_olmSessionsBoxName]!.keys) {
-        await _olmSessionsBox.put(key, json[_olmSessionsBoxName]![key]);
-      }
-      for (final key in json[_userDeviceKeysBoxName]!.keys) {
-        await _userDeviceKeysBox.put(key, json[_userDeviceKeysBoxName]![key]);
-      }
-      for (final key in json[_userDeviceKeysOutdatedBoxName]!.keys) {
-        await _userDeviceKeysOutdatedBox.put(
-          key,
-          json[_userDeviceKeysOutdatedBoxName]![key],
-        );
-      }
-      for (final key in json[_userCrossSigningKeysBoxName]!.keys) {
-        await _userCrossSigningKeysBox.put(
-          key,
-          json[_userCrossSigningKeysBoxName]![key],
-        );
-      }
-      for (final key in json[_ssssCacheBoxName]!.keys) {
-        await _ssssCacheBox.put(key, json[_ssssCacheBoxName]![key]);
-      }
-      for (final key in json[_presencesBoxName]!.keys) {
-        await _presencesBox.put(key, json[_presencesBoxName]![key]);
-      }
-      for (final key in json[_timelineFragmentsBoxName]!.keys) {
-        await _timelineFragmentsBox.put(
-          key,
-          json[_timelineFragmentsBoxName]![key],
-        );
-      }
-      for (final key in json[_seenDeviceIdsBoxName]!.keys) {
-        await _seenDeviceIdsBox.put(key, json[_seenDeviceIdsBoxName]![key]);
-      }
-      for (final key in json[_seenDeviceKeysBoxName]!.keys) {
-        await _seenDeviceKeysBox.put(key, json[_seenDeviceKeysBoxName]![key]);
-      }
+      await transaction(() async {
+        for (final key in json[_clientBoxName]!.keys) {
+          await _clientBox.put(key, json[_clientBoxName]![key]);
+        }
+        for (final key in json[_accountDataBoxName]!.keys) {
+          await _accountDataBox.put(key, json[_accountDataBoxName]![key]);
+        }
+        for (final key in json[_roomsBoxName]!.keys) {
+          await _roomsBox.put(key, json[_roomsBoxName]![key]);
+        }
+        for (final key in json[_preloadRoomStateBoxName]!.keys) {
+          await _preloadRoomStateBox.put(
+            key,
+            json[_preloadRoomStateBoxName]![key],
+          );
+        }
+        for (final key in json[_nonPreloadRoomStateBoxName]!.keys) {
+          await _nonPreloadRoomStateBox.put(
+            key,
+            json[_nonPreloadRoomStateBoxName]![key],
+          );
+        }
+        for (final key in json[_roomMembersBoxName]!.keys) {
+          await _roomMembersBox.put(key, json[_roomMembersBoxName]![key]);
+        }
+        for (final key in json[_toDeviceQueueBoxName]!.keys) {
+          await _toDeviceQueueBox.put(key, json[_toDeviceQueueBoxName]![key]);
+        }
+        for (final key in json[_roomAccountDataBoxName]!.keys) {
+          await _roomAccountDataBox.put(
+            key,
+            json[_roomAccountDataBoxName]![key],
+          );
+        }
+        for (final key in json[_inboundGroupSessionsBoxName]!.keys) {
+          await _inboundGroupSessionsBox.put(
+            key,
+            json[_inboundGroupSessionsBoxName]![key],
+          );
+        }
+        for (final key in json[_inboundGroupSessionsUploadQueueBoxName]!.keys) {
+          await _inboundGroupSessionsUploadQueueBox.put(
+            key,
+            json[_inboundGroupSessionsUploadQueueBoxName]![key],
+          );
+        }
+        for (final key in json[_outboundGroupSessionsBoxName]!.keys) {
+          await _outboundGroupSessionsBox.put(
+            key,
+            json[_outboundGroupSessionsBoxName]![key],
+          );
+        }
+        for (final key in json[_olmSessionsBoxName]!.keys) {
+          await _olmSessionsBox.put(key, json[_olmSessionsBoxName]![key]);
+        }
+        for (final key in json[_userDeviceKeysBoxName]!.keys) {
+          await _userDeviceKeysBox.put(key, json[_userDeviceKeysBoxName]![key]);
+        }
+        for (final key in json[_userDeviceKeysOutdatedBoxName]!.keys) {
+          await _userDeviceKeysOutdatedBox.put(
+            key,
+            json[_userDeviceKeysOutdatedBoxName]![key],
+          );
+        }
+        for (final key in json[_userCrossSigningKeysBoxName]!.keys) {
+          await _userCrossSigningKeysBox.put(
+            key,
+            json[_userCrossSigningKeysBoxName]![key],
+          );
+        }
+        for (final key in json[_ssssCacheBoxName]!.keys) {
+          await _ssssCacheBox.put(key, json[_ssssCacheBoxName]![key]);
+        }
+        for (final key in json[_presencesBoxName]!.keys) {
+          await _presencesBox.put(key, json[_presencesBoxName]![key]);
+        }
+        for (final key in json[_timelineFragmentsBoxName]!.keys) {
+          await _timelineFragmentsBox.put(
+            key,
+            json[_timelineFragmentsBoxName]![key],
+          );
+        }
+        for (final key in json[_seenDeviceIdsBoxName]!.keys) {
+          await _seenDeviceIdsBox.put(key, json[_seenDeviceIdsBoxName]![key]);
+        }
+        for (final key in json[_seenDeviceKeysBoxName]!.keys) {
+          await _seenDeviceKeysBox.put(key, json[_seenDeviceKeysBoxName]![key]);
+        }
+      });
       return true;
     } catch (e, s) {
       Logs().e('Database import error: ', e, s);
