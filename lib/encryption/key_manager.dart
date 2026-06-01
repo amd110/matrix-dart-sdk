@@ -272,12 +272,24 @@ class KeyManager {
       }
       return sess; // nothing to do
     }
+    final profiling = Encryption.enableDecryptProfiling;
+    final sqlSw = profiling ? (Stopwatch()..start()) : null;
     final session =
         await client.database.getInboundGroupSession(roomId, sessionId);
+    final sqlMicros = sqlSw?.elapsedMicroseconds ?? 0;
     if (session == null) return null;
     final userID = client.userID;
     if (userID == null) return null;
+    final fromDbSw = profiling ? (Stopwatch()..start()) : null;
     final dbSess = SessionKey.fromDb(session, userID);
+    if (profiling) {
+      Logs().i(
+        '[LoadSessionProfile] room=$roomId session=$sessionId '
+        'sql=${sqlMicros}us '
+        'fromDb(unpickle+json)=${fromDbSw!.elapsedMicroseconds}us '
+        'pickleLen=${session.pickle.length} indexesLen=${session.indexes.length}',
+      );
+    }
     final roomInboundGroupSessions =
         _inboundGroupSessions[roomId] ??= <String, SessionKey>{};
     if (!dbSess.isValid ||

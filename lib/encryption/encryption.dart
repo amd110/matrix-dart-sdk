@@ -33,6 +33,21 @@ class Encryption {
   final Client client;
   final bool debug;
 
+  /// 诊断用：开启后在 [decryptRoomEvent] 路径上分桶打印耗时
+  /// （DB 加载 session / vodozemac 运算 / JSON 解码 / 整体），用于定位
+  /// 「解密慢」的真实瓶颈。默认关闭，关闭时无任何额外开销。
+  ///
+  /// 在 App 启动时设置 `Encryption.enableDecryptProfiling = true;` 即可。
+  static bool enableDecryptProfiling = false;
+
+  /// [decryptRoomEventSync] 在 profiling 开启时写入的最近一次 vodozemac
+  /// 解密耗时（微秒），供 [decryptRoomEvent] 汇总打印。两者间无 await，
+  /// 单次调用内同步执行，不存在竞态。
+  int _profileDecryptMicros = 0;
+
+  /// 同上，最近一次 `json.decode(plaintext)` 的耗时（微秒）。
+  int _profileJsonMicros = 0;
+
   bool get enabled => olmManager.enabled;
 
   /// Returns the base64 encoded keys to store them in a store.
@@ -208,8 +223,13 @@ class Encryption {
       // decrypt errors here may mean we have a bad session key - others might have a better one
       canRequestSession = true;
 
+      final profiling = enableDecryptProfiling;
+      final decryptSw = profiling ? (Stopwatch()..start()) : null;
       final decryptResult = inboundGroupSession!.inboundGroupSession!
           .decrypt(content.ciphertextMegolm!);
+      if (decryptSw != null) {
+        _profileDecryptMicros = decryptSw.elapsedMicroseconds;
+      }
       canRequestSession = false;
 
       // we can't have the key be an int, else json-serializing will fail, thus we need it to be a string
@@ -240,7 +260,11 @@ class Encryption {
             // ignore: discarded_futures
             .onError((e, _) => Logs().e('Ignoring error for updating indexes'));
       }
+      final jsonSw = profiling ? (Stopwatch()..start()) : null;
       decryptedPayload = json.decode(decryptResult.plaintext);
+      if (jsonSw != null) {
+        _profileJsonMicros = jsonSw.elapsedMicroseconds;
+      }
     } catch (exception) {
       Logs().d('Could not decrypt event', exception);
       // alright, if this was actually by our own outbound group session, we might as well clear it
@@ -306,6 +330,14 @@ class Encryption {
       }
       final content = event.parsedRoomEncryptedContent;
       final sessionId = content.sessionId;
+
+      final profiling = enableDecryptProfiling;
+      _profileDecryptMicros = 0;
+      _profileJsonMicros = 0;
+      final totalSw = profiling ? (Stopwatch()..start()) : null;
+      var dbLoadMicros = 0;
+      var dbHit = false;
+
       if (sessionId != null &&
           !(keyManager
                   .getInboundGroupSession(
@@ -314,12 +346,28 @@ class Encryption {
                   )
                   ?.isValid ??
               false)) {
+        // 缓存未命中：这里会走数据库读取 session，是最常见的疑似瓶颈
+        dbHit = true;
+        final dbSw = profiling ? (Stopwatch()..start()) : null;
         await keyManager.loadInboundGroupSession(
           event.room.id,
           sessionId,
         );
+        if (dbSw != null) dbLoadMicros = dbSw.elapsedMicroseconds;
       }
       event = decryptRoomEventSync(event);
+
+      if (totalSw != null) {
+        totalSw.stop();
+        Logs().i(
+          '[DecryptProfile] room=${event.room.id} session=$sessionId '
+          'total=${totalSw.elapsedMicroseconds}us '
+          'dbLoad=${dbHit ? '$dbLoadMicros' : 'cacheHit(0)'}us '
+          'vodozemac=$_profileDecryptMicros'
+          'us jsonDecode=$_profileJsonMicros'
+          'us decrypted=${event.type != EventTypes.Encrypted}',
+        );
+      }
       if (event.type == EventTypes.Encrypted &&
           event.content['can_request_session'] == true &&
           sessionId != null) {

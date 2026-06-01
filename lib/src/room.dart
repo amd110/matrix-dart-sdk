@@ -24,6 +24,7 @@ import 'package:async/async.dart';
 import 'package:collection/collection.dart';
 import 'package:html_unescape/html_unescape.dart';
 
+import 'package:matrix/encryption/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix/src/models/timeline_chunk.dart';
 import 'package:matrix/src/utils/cached_stream_controller.dart';
@@ -865,7 +866,7 @@ class Room {
     bool displayPendingEvent = true,
   }) async {
     txid ??= client.generateUniqueTransactionId();
-    
+
     final fileCacheUri = Uri(scheme: 'cache', host: 'file', path: txid);
     await client.database.storeFileStream(
       fileCacheUri,
@@ -1017,10 +1018,17 @@ class Room {
         thumbnail; // ignore: omit_local_variable_types
     EncryptedFile? encryptedFile;
     EncryptedFile? encryptedThumbnail;
+    // 诊断埋点：分桶统计发送文件的「加密 / 上传视频 / 上传缩略图」耗时。
+    // 复用 Encryption.enableDecryptProfiling 开关。
+    final profiling = Encryption.enableDecryptProfiling;
+    var encryptMicros = 0;
+    var uploadFileMicros = 0;
+    var uploadThumbMicros = 0;
     if (encrypted && client.fileEncryptionEnabled) {
       syncUpdate.rooms!.join!.values.first.timeline!.events!.first
           .unsigned![fileSendingStatusKey] = FileSendingStatus.encrypting.name;
       await _handleFakeSync(syncUpdate);
+      final encryptSw = profiling ? (Stopwatch()..start()) : null;
       encryptedFile = await file.encrypt(
         nativeImplementations: client.nativeImplementations,
       );
@@ -1033,6 +1041,7 @@ class Room {
         uploadThumbnail =
             encryptedThumbnail.toMatrixFile(mimeType: thumbnail.mimeType);
       }
+      if (encryptSw != null) encryptMicros = encryptSw.elapsedMicroseconds;
     }
     Uri? uploadResp, thumbnailUploadResp;
 
@@ -1043,26 +1052,34 @@ class Room {
     while (uploadResp == null ||
         (uploadThumbnail != null && thumbnailUploadResp == null)) {
       try {
-        uploadResp ??= await client.uploadContent(
-          uploadFile,
-          contentLength: uploadFile.size,
-          filename: uploadFile.name,
-          contentType: uploadFile.mimeType,
-        );
-        if (uploadThumbnail != null) {
-          thumbnailUploadResp ??= await client.uploadContent(
+        if (uploadResp == null) {
+          final upSw = profiling ? (Stopwatch()..start()) : null;
+          uploadResp = await client.uploadContent(
+            uploadFile,
+            contentLength: uploadFile.size,
+            filename: uploadFile.name,
+            contentType: uploadFile.mimeType,
+          );
+          if (upSw != null) uploadFileMicros += upSw.elapsedMicroseconds;
+        }
+        if (uploadThumbnail != null && thumbnailUploadResp == null) {
+          final upThumbSw = profiling ? (Stopwatch()..start()) : null;
+          thumbnailUploadResp = await client.uploadContent(
             uploadThumbnail,
             contentLength: uploadThumbnail.size,
             filename: uploadThumbnail.name,
             contentType: uploadThumbnail.mimeType,
           );
+          if (upThumbSw != null) {
+            uploadThumbMicros += upThumbSw.elapsedMicroseconds;
+          }
         }
       } on MatrixException catch (_) {
         syncUpdate.rooms!.join!.values.first.timeline!.events!.first
             .unsigned![messageSendingStatusKey] = EventStatus.error.intValue;
         await _handleFakeSync(syncUpdate);
         rethrow;
-      } catch (e,s) {
+      } catch (e, s) {
         if (DateTime.now().isAfter(timeoutDate)) {
           syncUpdate.rooms!.join!.values.first.timeline!.events!.first
               .unsigned![messageSendingStatusKey] = EventStatus.error.intValue;
@@ -1072,6 +1089,17 @@ class Room {
         Logs().w('Send File into room failed. Try again...', e, s);
         await Future.delayed(Duration(seconds: 1));
       }
+    }
+
+    if (profiling) {
+      Logs().i(
+        '[SendFileProfile] room=$id '
+        'fileSize=${(uploadFile.size / 1024).toStringAsFixed(1)}KB '
+        'thumbSize=${uploadThumbnail != null ? (uploadThumbnail.size / 1024).toStringAsFixed(1) : '0'}KB '
+        'encrypt=${encryptMicros}us '
+        'uploadFile=${uploadFileMicros}us '
+        'uploadThumb=${uploadThumbMicros}us',
+      );
     }
 
     // Send event
@@ -1144,9 +1172,11 @@ class Room {
           : ext != null
               ? uploadResp.replace(queryParameters: extParam)
               : uploadResp;
-      await client.database.storeCacheFileAs(tempFileCacheUri, playbackCacheKey);
+      await client.database
+          .storeCacheFileAs(tempFileCacheUri, playbackCacheKey);
     } catch (e) {
-      Logs().w('sendFileEvent: failed to promote temp cache to playback cache', e);
+      Logs().w(
+          'sendFileEvent: failed to promote temp cache to playback cache', e);
       await client.database.deleteFile(tempFileCacheUri);
     }
 
