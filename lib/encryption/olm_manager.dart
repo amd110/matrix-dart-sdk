@@ -72,14 +72,29 @@ class OlmManager {
     ourDeviceId = deviceId;
     if (olmAccount == null) {
       _olmAccount = vod.Account();
-      if (!await uploadKeys(
+      final uploadSucceeded = await uploadKeys(
         uploadDeviceKeys: true,
         updateDatabase: false,
         dehydratedDeviceAlgorithm: dehydratedDeviceAlgorithm,
         dehydratedDevicePickleKey:
             dehydratedDeviceAlgorithm != null ? pickleKey : null,
-      )) {
-        throw ('Upload key failed');
+      );
+      if (!uploadSucceeded) {
+        final exception = _lastUploadKeysException;
+        if (exception != null) {
+          final stackTrace = _lastUploadKeysStackTrace;
+          if (stackTrace != null) {
+            Error.throwWithStackTrace(exception, stackTrace);
+          }
+          throw exception;
+        }
+        throw Exception(
+          'Upload key failed (no server error captured): '
+          'reason=${_lastUploadKeysError ?? 'unknown'}, '
+          'userId=${client.userID}, deviceId=$ourDeviceId, '
+          'clientDeviceId=${client.deviceID}, isLogged=${client.isLogged()}, '
+          'dehydratedDeviceAlgorithm=$dehydratedDeviceAlgorithm',
+        );
       }
     } else {
       try {
@@ -121,6 +136,13 @@ class OlmManager {
 
   bool _uploadKeysLock = false;
   CancelableOperation<Map<String, int>>? currentUpload;
+  MatrixException? _lastUploadKeysException;
+  StackTrace? _lastUploadKeysStackTrace;
+
+  /// Records why [uploadKeys] returned `false` without a [MatrixException]
+  /// (e.g. concurrent upload, cancelled request, OTK count mismatch), so the
+  /// caller can surface a detailed reason instead of a generic failure.
+  String? _lastUploadKeysError;
 
   int? get maxNumberOfOneTimeKeys => _olmAccount?.maxNumberOfOneTimeKeys;
 
@@ -140,7 +162,17 @@ class OlmManager {
       return true;
     }
 
+    _lastUploadKeysException = null;
+    _lastUploadKeysStackTrace = null;
+    _lastUploadKeysError = null;
+
     if (_uploadKeysLock) {
+      _lastUploadKeysError =
+          'another key upload is still running for device $ourDeviceId '
+          '(concurrent uploadKeys call)';
+      Logs().w(
+        'Skipped uploading keys because another upload is still running for device $ourDeviceId.',
+      );
       return false;
     }
     _uploadKeysLock = true;
@@ -261,6 +293,12 @@ class OlmManager {
       );
       final response = await currentUpload.valueOrCancellation();
       if (response == null) {
+        _lastUploadKeysError =
+            'key upload for device $ourDeviceId was cancelled before the '
+            'server returned a response (client disposed / re-init during upload?)';
+        Logs().w(
+          'Uploading keys was cancelled before the server returned a response.',
+        );
         _uploadKeysLock = false;
         return false;
       }
@@ -270,11 +308,28 @@ class OlmManager {
       if (updateDatabase) {
         await encryption.olmDatabase?.updateClientKeys(pickledOlmAccount!);
       }
-      return (uploadedOneTimeKeysCount != null &&
+      final success = (uploadedOneTimeKeysCount != null &&
               response['signed_curve25519'] == uploadedOneTimeKeysCount) ||
           uploadedOneTimeKeysCount == null;
-    } on MatrixException catch (exception) {
+      if (!success) {
+        _lastUploadKeysError =
+            'server acknowledged ${response['signed_curve25519']} '
+            'signed_curve25519 one-time keys but expected '
+            '$uploadedOneTimeKeysCount for device $ourDeviceId';
+        Logs().w('Uploading keys failed: $_lastUploadKeysError');
+      }
+      return success;
+    } on MatrixException catch (exception, stackTrace) {
       _uploadKeysLock = false;
+      _lastUploadKeysException = exception;
+      _lastUploadKeysStackTrace = stackTrace;
+      Logs().e(
+        'Failed to upload keys for device $ourDeviceId '
+        '(uploadDeviceKeys=$uploadDeviceKeys, retry=$retry): '
+        '${jsonEncode(exception.raw)}',
+        exception,
+        stackTrace,
+      );
 
       // we failed to upload the keys. If we only tried to upload one time keys, try to recover by removing them and generating new ones.
       if (!uploadDeviceKeys &&
@@ -291,11 +346,13 @@ class OlmManager {
           }
         }
 
-        await uploadKeys(
+        return await uploadKeys(
           uploadDeviceKeys: uploadDeviceKeys,
           oldKeyCount: oldKeyCount,
           updateDatabase: updateDatabase,
           unusedFallbackKey: unusedFallbackKey,
+          dehydratedDeviceAlgorithm: dehydratedDeviceAlgorithm,
+          dehydratedDevicePickleKey: dehydratedDevicePickleKey,
           retry: retry - 1,
         );
       }
