@@ -27,6 +27,7 @@ import 'package:matrix/encryption/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix/src/database/database_file_storage_stub.dart'
     if (dart.library.io) 'package:matrix/src/database/database_file_storage_io.dart';
+import 'package:matrix/src/utils/attachment_cache_key.dart';
 import 'package:matrix/src/utils/file_send_request_credentials.dart';
 import 'package:matrix/src/utils/html_to_text.dart';
 import 'package:matrix/src/utils/markdown.dart';
@@ -798,9 +799,11 @@ class Event extends MatrixEvent {
     // the cached decrypted content can be retrieved without re-decrypting.
     final isEncrypted =
         getThumbnail ? isThumbnailEncrypted : isAttachmentEncrypted;
-    final cacheKey = isEncrypted
-        ? mxcUrl.replace(queryParameters: {'decrypted': '1'})
-        : mxcUrl;
+    final cacheKey = attachmentCacheKey(
+      mxcUrl,
+      encrypted: isEncrypted,
+      mimeType: getThumbnail ? thumbnailMimetype : attachmentMimetype,
+    );
 
     return (await room.client.database.getFile(cacheKey)) != null;
   }
@@ -827,9 +830,14 @@ class Event extends MatrixEvent {
       throw "This event hasn't any attachment or thumbnail.";
     }
 
-    final inFlight = room.client.inFlightDownloads[mxcUrl];
-    if (inFlight != null) {
-      return inFlight;
+    final shareInFlight = cancellationToken == null &&
+        !fromLocalStoreOnly &&
+        onDownloadProgress == null;
+    if (shareInFlight) {
+      final inFlight = room.client.inFlightDownloads[mxcUrl];
+      if (inFlight != null) {
+        return inFlight;
+      }
     }
 
     final future = _downloadAndDecryptAttachmentInternal(
@@ -840,12 +848,16 @@ class Event extends MatrixEvent {
       cancellationToken: cancellationToken,
     );
 
-    room.client.inFlightDownloads[mxcUrl] = future;
+    if (shareInFlight) {
+      room.client.inFlightDownloads[mxcUrl] = future;
+    }
 
     try {
       return await future;
     } finally {
-      room.client.inFlightDownloads.remove(mxcUrl);
+      if (shareInFlight) {
+        room.client.inFlightDownloads.remove(mxcUrl);
+      }
     }
   }
 
@@ -893,13 +905,12 @@ class Event extends MatrixEvent {
 
     // 加密附件使用派生 key 缓存解密内容，避免将加密原文和解密内容混存。
     // 'ext' 参数将 MIME 扩展名编码进 cache key，使缓存文件带有正确后缀（iOS AVPlayer 需要此扩展名识别编解码器）。
-    final ext = extensionFromMime(attachmentMimetype);
-    final extParam = ext != null ? {'ext': ext} : <String, String>{};
-    final cacheKey = isEncrypted
-        ? mxcUrl.replace(queryParameters: {'decrypted': '1', ...extParam})
-        : ext != null
-            ? mxcUrl.replace(queryParameters: extParam)
-            : mxcUrl;
+    final mimeType = getThumbnail ? thumbnailMimetype : attachmentMimetype;
+    final cacheKey = attachmentCacheKey(
+      mxcUrl,
+      encrypted: isEncrypted,
+      mimeType: mimeType,
+    );
 
     final cachedFile = await database.getFile(cacheKey);
     // 缓存命中（包括已解密的加密附件或已缓存的非加密附件）
@@ -910,7 +921,7 @@ class Event extends MatrixEvent {
         name: getThumbnail
             ? '$filename.thumbnail.${extensionFromMime(attachmentMimetype)}'
             : filename,
-        mimeType: attachmentMimetype,
+        mimeType: mimeType,
       );
     }
 
@@ -995,8 +1006,6 @@ class Event extends MatrixEvent {
     }
 
     final filename = content.tryGet<String>('filename') ?? body;
-    final mimeType = attachmentMimetype;
-
     if (downloadedFile == null) throw Exception('Downloaded file is missing');
     if (totalSw != null) {
       totalSw.stop();

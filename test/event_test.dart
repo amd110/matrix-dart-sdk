@@ -19,6 +19,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:http/http.dart' as http;
 import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix/src/models/timeline_chunk.dart';
@@ -27,6 +28,35 @@ import 'package:vodozemac_plus/vodozemac_plus.dart' as vod;
 
 import 'fake_client.dart';
 import 'fake_database.dart';
+
+class _SlowMediaFakeMatrixApi extends FakeMatrixApi {
+  final _mediaStarted = <String, int>{};
+
+  int mediaHits(String mediaId) => _mediaStarted[mediaId] ?? 0;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final segments = request.url.pathSegments;
+    final mediaIndex = segments.indexOf('media');
+    if (request.method == 'GET' &&
+        mediaIndex != -1 &&
+        segments.length > mediaIndex + 3 &&
+        segments[mediaIndex + 1] == 'download') {
+      final mediaId = segments[mediaIndex + 3];
+      _mediaStarted[mediaId] = mediaHits(mediaId) + 1;
+      return http.StreamedResponse(
+        Stream<List<int>>.periodic(
+          const Duration(milliseconds: 20),
+          (index) => index == 0 ? [1] : [2],
+        ).take(2),
+        200,
+        contentLength: 2,
+        request: request,
+      );
+    }
+    return super.send(request);
+  }
+}
 
 void main() async {
   final client = Client(
@@ -2601,6 +2631,95 @@ void main() async {
 
       await room.client.dispose(closeDatabase: true);
     });
+
+    test(
+      'isAttachmentInLocalStore uses the same extension cache key',
+      () async {
+      final room = Room(id: '!localpart:server.abc', client: await getClient());
+      final event = Event.fromJson(
+        {
+          'type': EventTypes.Message,
+          'content': {
+            'body': 'video',
+            'msgtype': 'm.video',
+            'url': 'mxc://example.org/video-cache-key',
+            'info': {
+              'mimetype': 'video/mp4',
+              'size': 2,
+            },
+          },
+          'event_id': r'$video-cache-key',
+          'sender': '@alice:example.org',
+        },
+        room,
+      );
+
+      await room.client.database.storeFileStream(
+        Uri.parse('mxc://example.org/video-cache-key?ext=mp4'),
+        Stream.value([1, 2]),
+        DateTime.now().millisecondsSinceEpoch,
+      );
+
+      expect(await event.isAttachmentInLocalStore(), true);
+
+      await room.client.dispose(closeDatabase: true);
+      },
+    );
+
+    test(
+      'cancelling one in-flight attachment download does not cancel another caller',
+      () async {
+        final api = _SlowMediaFakeMatrixApi();
+        final testClient = Client(
+          'testclient',
+          httpClient: api,
+          database: await getDatabase(),
+        );
+        FakeMatrixApi.client = testClient;
+        await testClient.checkHomeserver(
+          Uri.parse('https://fakeServer.notExisting'),
+          checkWellKnown: false,
+        );
+        await testClient.init(
+          newToken: 'abcd',
+          newUserID: '@test:fakeServer.notExisting',
+          newHomeserver: testClient.homeserver,
+        );
+        final room = Room(id: '!localpart:server.abc', client: testClient);
+        final event = Event.fromJson(
+          {
+            'type': EventTypes.Message,
+            'content': {
+              'body': 'slow.bin',
+              'msgtype': 'm.file',
+              'url': 'mxc://example.org/slow-in-flight',
+              'info': {
+                'mimetype': 'application/octet-stream',
+                'size': 2,
+              },
+            },
+            'event_id': r'$slow-in-flight',
+            'sender': '@alice:example.org',
+          },
+          room,
+        );
+
+        final token = CancellationToken();
+        final cancelled = event.downloadAndDecryptAttachment(
+          cancellationToken: token,
+        );
+        final uncancelled = event.downloadAndDecryptAttachment();
+
+        token.cancel();
+
+        await expectLater(cancelled, throwsA(isA<DownloadCancelledException>()));
+        final file = await uncancelled;
+        expect(await file.getBytes(), [1, 2]);
+        expect(api.mediaHits('slow-in-flight'), greaterThanOrEqualTo(1));
+
+        await testClient.dispose(closeDatabase: true);
+      },
+    );
 
     test('downloadAndDecryptAttachment store only', tags: 'olm', () async {
       final FILE_BUFF = Uint8List.fromList([0]);

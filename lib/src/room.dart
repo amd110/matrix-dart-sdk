@@ -27,12 +27,12 @@ import 'package:html_unescape/html_unescape.dart';
 import 'package:matrix/encryption/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix/src/models/timeline_chunk.dart';
+import 'package:matrix/src/utils/attachment_cache_key.dart';
 import 'package:matrix/src/utils/cached_stream_controller.dart';
 import 'package:matrix/src/utils/file_send_request_credentials.dart';
 import 'package:matrix/src/utils/markdown.dart';
 import 'package:matrix/src/utils/marked_unread.dart';
 import 'package:matrix/src/utils/space_child.dart';
-import 'package:mime/mime.dart';
 
 /// max PDU size for server to accept the event with some buffer incase the server adds unsigned data f.ex age
 /// https://spec.matrix.org/v1.9/client-server-api/#size-limits
@@ -1165,18 +1165,18 @@ class Room {
     // 临时文件存的是加密前的原始内容，因此对加密/非加密房间均可直接作为解密缓存使用。
     final tempFileCacheUri = Uri(scheme: 'cache', host: 'file', path: txid);
     try {
-      final ext = extensionFromMime(file.mimeType);
-      final extParam = ext != null ? {'ext': ext} : <String, String>{};
-      final playbackCacheKey = encryptedFile != null
-          ? uploadResp.replace(queryParameters: {'decrypted': '1', ...extParam})
-          : ext != null
-              ? uploadResp.replace(queryParameters: extParam)
-              : uploadResp;
+      final playbackCacheKey = attachmentCacheKey(
+        uploadResp,
+        encrypted: encryptedFile != null,
+        mimeType: file.mimeType,
+      );
       await client.database
           .storeCacheFileAs(tempFileCacheUri, playbackCacheKey);
     } catch (e) {
       Logs().w(
-          'sendFileEvent: failed to promote temp cache to playback cache', e);
+        'sendFileEvent: failed to promote temp cache to playback cache',
+        e,
+      );
       await client.database.deleteFile(tempFileCacheUri);
     }
 
