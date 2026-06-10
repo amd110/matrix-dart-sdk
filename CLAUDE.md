@@ -44,6 +44,7 @@ import_sorter --set-exit-if-changed .  # 排序导入（CI 强制执行）
 
 ```bash
 dart test                                          # 运行所有测试
+dart test --concurrency=$(getconf _NPROCESSORS_ONLN) test  # 多核并发运行（推荐）
 dart test test/client_test.dart                    # 运行单个测试文件
 dart test --name "test name"                       # 按名称过滤运行
 dart test -x olm                                   # 跳过 OLM 测试（不需要 vodozemac）
@@ -201,6 +202,22 @@ App 层应：
 - 使用 `requestHistory()` 时配置合理的 `historyCount` 参数
 - 在离开聊天室时调用 `timeline.cancelSubscriptions()` 进行清理
 - 对极大的房间（千级消息）考虑分页或虚拟滚动以减少 Event 对象数量
+
+### Content Scanner（媒体安全扫描代理）
+
+`Client` 支持可选的 `MatrixContentScannerConfig contentScannerConfig`，将加密附件的下载与解密委托给中间代理服务（Scanner）完成：
+- **非加密附件**：走 Scanner 的 GET 路由（`downloadUri`）
+- **加密附件**：将加密元数据（含密钥）POST 给 `downloadEncryptedUri`，由 Scanner 代为下载解密后返回明文字节——**密钥会离开客户端**，需确保 Scanner 可信
+- **配置入口**：`lib/src/utils/content_scanner_config.dart`，导出自 `lib/matrix.dart`
+- **URI 工具**：`lib/src/utils/uri_extension.dart` 的 `getDownloadUri`/`getThumbnailUri` 已感知 Scanner，传入 `contentScannerConfig` 时自动路由到代理端点
+
+### SSSS 密钥管理
+
+`lib/encryption/ssss.dart` 提供集中化的密钥管理方法，可通过 `encryption.ssss` 调用：
+- **`looksLikeRecoveryKey(input)`**：通过长度（48字节 Base58）和前缀（`Es`）判断输入是恢复密钥还是口令，用于分支解锁逻辑
+- **`analyzeEncryptedSecrets(key)`**：分析哪些秘密已用指定密钥加密，返回已迁移/未迁移/损坏的分类结果
+- **`migrateSecretsToKey(oldKey, newKey)`**：将旧密钥加密的秘密批量迁移到新密钥，可选 `stripKeys: true` 删除旧密钥
+- **`_setAccountDataAndWaitForSync`**：PUT accountData 后监听 `onAccountData` 流等待 sync 落地，替代原来的轮询；内部 60 秒超时防止永久挂起
 
 ## 主要依赖
 
