@@ -1509,7 +1509,8 @@ void main() {
       'MatrixFile.encrypt() uses nativeImplementations when provided',
       () async {
         final testBytes = Uint8List.fromList([1, 2, 3, 4, 5]);
-        final tmp = File('${Directory.systemTemp.path}/matrix_test_encrypt.dat');
+        final tmp =
+            File('${Directory.systemTemp.path}/matrix_test_encrypt.dat');
         await tmp.writeAsBytes(testBytes);
         final file = MatrixFile(name: 'test.dat', path: tmp.path);
 

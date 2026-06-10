@@ -73,7 +73,8 @@ void main() {
       expect(thumbnail!.height, 64, reason: 'Unexpected thumbnail height');
 
       // shrink writes result back to path, so use a fresh copy
-      final tmpPng2 = File('${Directory.systemTemp.path}/matrix_test_bomb2.png');
+      final tmpPng2 =
+          File('${Directory.systemTemp.path}/matrix_test_bomb2.png');
       await tmpPng2.writeAsBytes(data);
       final shrinkedImage = await MatrixImageFile.shrink(
         path: tmpPng2.path,
@@ -130,23 +131,27 @@ void main() {
 
       final key = secureRandomBytes(32);
       final iv = secureRandomBytes(16);
-      
+
       // Generate a mock 10KB "video" file
       final fileData = secureRandomBytes(10240);
 
       // 1. Encrypt with one-shot C FFI
-      final oneShotEncrypted = vod.CryptoUtils.aesCtr(input: fileData, key: key, iv: iv);
+      final oneShotEncrypted =
+          vod.CryptoUtils.aesCtr(input: fileData, key: key, iv: iv);
 
       // 2. Encrypt with chunked stream
       // Chunk into 100 byte pieces
       final chunkSize = 100;
       final chunks = <List<int>>[];
       for (var i = 0; i < fileData.length; i += chunkSize) {
-        chunks.add(fileData.sublist(i, i + chunkSize > fileData.length ? fileData.length : i + chunkSize));
+        chunks.add(fileData.sublist(i,
+            i + chunkSize > fileData.length ? fileData.length : i + chunkSize));
       }
       final stream = Stream.fromIterable(chunks);
 
-      final streamEncrypted = await streamAesCtr(input: stream, key: key, iv: iv).fold<List<int>>(<int>[], (p, e) => p..addAll(e));
+      final streamEncrypted =
+          await streamAesCtr(input: stream, key: key, iv: iv)
+              .fold<List<int>>(<int>[], (p, e) => p..addAll(e));
 
       expect(Uint8List.fromList(streamEncrypted), oneShotEncrypted);
     });

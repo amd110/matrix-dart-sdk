@@ -58,7 +58,8 @@ Future<EncryptedFile> encryptFile(
   final key = secureRandomBytes(32);
   final iv = secureRandomBytes(16);
 
-  final encryptedStream = streamAesCtr(input: input.openRead(), key: key, iv: iv);
+  final encryptedStream =
+      streamAesCtr(input: input.openRead(), key: key, iv: iv);
 
   final actualTempDir = tempDir ?? Directory.systemTemp;
   final tempFile = File(
@@ -83,7 +84,8 @@ Future<EncryptedFile> encryptFile(
     await sink.close();
     sha256Sink.close();
 
-    if (finalDigest == null) throw Exception('Failed to calculate SHA256 digest');
+    if (finalDigest == null)
+      throw Exception('Failed to calculate SHA256 digest');
 
     return EncryptedFile(
       path: tempFile.path,
@@ -128,7 +130,8 @@ Future<File> decryptFile(
     return chunk;
   });
 
-  final decryptedStream = streamAesCtr(input: encryptedStream, key: key, iv: iv);
+  final decryptedStream =
+      streamAesCtr(input: encryptedStream, key: key, iv: iv);
 
   final actualTempDir = tempDir ?? Directory.systemTemp;
   final tempFile = File(
@@ -141,11 +144,13 @@ Future<File> decryptFile(
     await sink.close();
     sha256Sink.close();
 
-    if (finalDigest == null) throw Exception('Failed to calculate SHA256 digest');
+    if (finalDigest == null)
+      throw Exception('Failed to calculate SHA256 digest');
 
     final actualHash = base64.encode(finalDigest!.bytes);
     if (actualHash != expectedHash) {
-      throw Exception('Encrypted file integrity check failed: SHA-256 mismatch');
+      throw Exception(
+          'Encrypted file integrity check failed: SHA-256 mismatch');
     }
 
     return tempFile;

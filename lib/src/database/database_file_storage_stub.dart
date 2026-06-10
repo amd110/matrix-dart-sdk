@@ -8,7 +8,8 @@ mixin DatabaseFileStorage {
   late final Uri? fileStorageLocation;
   late final Duration? deleteFilesAfterDuration;
 
-  Future<void> storeFileStream(Uri mxcUri, Stream<List<int>> stream, int time) async {
+  Future<void> storeFileStream(
+      Uri mxcUri, Stream<List<int>> stream, int time) async {
     await stream.drain();
   }
 
@@ -45,4 +46,3 @@ mixin DatabaseFileStorage {
         'downloadToFileViaStream is not supported on web/stub platform.',
       );
 }
-

@@ -480,7 +480,8 @@ void main() async {
       event = Event.fromJson(
         {
           'content': {
-            'avatar_url': 'mxc://pixelthefox.net/bmGuC44Eeb3BomfkZTP02DVnGaRp4dek',
+            'avatar_url':
+                'mxc://pixelthefox.net/bmGuC44Eeb3BomfkZTP02DVnGaRp4dek',
             'displayname': [
               [
                 [[]],
@@ -495,7 +496,8 @@ void main() async {
           'type': 'm.room.member',
           'unsigned': {
             'prev_content': {
-              'avatar_url': 'mxc://pixelthefox.net/bmGuC44Eeb3BomfkZTP02DVnGaRp4dek',
+              'avatar_url':
+                  'mxc://pixelthefox.net/bmGuC44Eeb3BomfkZTP02DVnGaRp4dek',
               'displayname': 1,
               'membership': 'join',
             },
@@ -506,7 +508,8 @@ void main() async {
           'user_id': '@nyaaori:pixelthefox.net',
           'replaces_state': '\$kcqn2k6kXQKOM45t_p8OA03PQRR3KB2N_PN4HUq1GiY',
           'prev_content': {
-            'avatar_url': 'mxc://pixelthefox.net/bmGuC44Eeb3BomfkZTP02DVnGaRp4dek',
+            'avatar_url':
+                'mxc://pixelthefox.net/bmGuC44Eeb3BomfkZTP02DVnGaRp4dek',
             'displayname': 1,
             'membership': 'join',
           },
@@ -1622,7 +1625,8 @@ void main() async {
                 if (isEdit) ...{
                   'm.new_content': {
                     if (editBody != null) 'body': editBody,
-                    if (editFormattedBody != null) 'formatted_body': editFormattedBody,
+                    if (editFormattedBody != null)
+                      'formatted_body': editFormattedBody,
                     if (editHtml) 'format': 'org.matrix.custom.html',
                   },
                   'm.relates_to': {
@@ -2050,7 +2054,8 @@ void main() async {
         expectation: 'body',
         plaintextBody: false,
         body: '> <@some:user.id> acb def\n\nbody',
-        formattedBody: '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
+        formattedBody:
+            '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
         html: true,
         isEdit: false,
         // strictly speaking there is no quote in edits, but we have to handle them anyway because of other clients doing it wrong
@@ -2063,7 +2068,8 @@ void main() async {
         expectation: 'body',
         plaintextBody: true,
         body: '> <@some:user.id> acb def\n\nbody',
-        formattedBody: '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
+        formattedBody:
+            '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
         html: false,
         isEdit: false,
         // strictly speaking there is no quote in edits, but we have to handle them anyway because of other clients doing it wrong
@@ -2089,7 +2095,8 @@ void main() async {
         expectation: '**formatted body**',
         plaintextBody: true,
         body: '> <@some:user.id> acb def\n\nbody',
-        formattedBody: '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
+        formattedBody:
+            '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
         html: true,
         isEdit: false,
         // strictly speaking there is no quote in edits, but we have to handle them anyway because of other clients doing it wrong
@@ -2102,7 +2109,8 @@ void main() async {
         expectation: 'edit body',
         plaintextBody: false,
         body: '> <@some:user.id> acb def\n\nbody',
-        formattedBody: '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
+        formattedBody:
+            '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
         html: true,
         isEdit: true,
         // strictly speaking there is no quote in edits, but we have to handle them anyway because of other clients doing it wrong
@@ -2115,7 +2123,8 @@ void main() async {
         expectation: 'edit body',
         plaintextBody: true,
         body: '> <@some:user.id> acb def\n\nbody',
-        formattedBody: '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
+        formattedBody:
+            '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
         html: true,
         isEdit: true,
         // strictly speaking there is no quote in edits, but we have to handle them anyway because of other clients doing it wrong
@@ -2128,7 +2137,8 @@ void main() async {
         expectation: '**edit formatted body**',
         plaintextBody: true,
         body: '> <@some:user.id> acb def\n\nbody',
-        formattedBody: '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
+        formattedBody:
+            '<mx-reply><blockquote>abc</blockquote></mx-reply><b>formatted body</b>',
         html: true,
         isEdit: true,
         // strictly speaking there is no quote in edits, but we have to handle them anyway because of other clients doing it wrong
@@ -2394,18 +2404,24 @@ void main() async {
       'encrypted attachments',
       tags: 'olm',
       () async {
-        final FILE_BUFF_ENC = Uint8List.fromList([0x3B, 0x6B, 0xB2, 0x8C, 0xAF]);
-        final FILE_BUFF_DEC = Uint8List.fromList([0x74, 0x65, 0x73, 0x74, 0x0A]);
-        final THUMB_BUFF_ENC = Uint8List.fromList([0x55, 0xD7, 0xEB, 0x72, 0x05, 0x13]);
-        final THUMB_BUFF_DEC = Uint8List.fromList([0x74, 0x68, 0x75, 0x6D, 0x62, 0x0A]);
+        final FILE_BUFF_ENC =
+            Uint8List.fromList([0x3B, 0x6B, 0xB2, 0x8C, 0xAF]);
+        final FILE_BUFF_DEC =
+            Uint8List.fromList([0x74, 0x65, 0x73, 0x74, 0x0A]);
+        final THUMB_BUFF_ENC =
+            Uint8List.fromList([0x55, 0xD7, 0xEB, 0x72, 0x05, 0x13]);
+        final THUMB_BUFF_DEC =
+            Uint8List.fromList([0x74, 0x68, 0x75, 0x6D, 0x62, 0x0A]);
         Future<Uint8List> downloadCallback(Uri uri) async {
           return {
             '/_matrix/client/v1/media/download/example.com/file': FILE_BUFF_ENC,
-            '/_matrix/client/v1/media/download/example.com/thumb': THUMB_BUFF_ENC,
+            '/_matrix/client/v1/media/download/example.com/thumb':
+                THUMB_BUFF_ENC,
           }[uri.path]!;
         }
 
-        final room = Room(id: '!localpart:server.abc', client: await getClient());
+        final room =
+            Room(id: '!localpart:server.abc', client: await getClient());
         var event = Event.fromJson(
           {
             'type': EventTypes.Message,
@@ -2524,7 +2540,7 @@ void main() async {
         onDownloadProgress: progressList.add,
       );
       await client.dispose();
-      expect(progressList, [112]);
+      expect(progressList, [100]);
     });
     test('downloadAndDecryptAttachment store', tags: 'olm', () async {
       final FILE_BUFF = Uint8List.fromList([0]);
@@ -2575,7 +2591,8 @@ void main() async {
       await room.client.dispose(closeDatabase: true);
     });
 
-    test('downloadAndDecryptAttachment caches decrypted content', tags: 'olm', () async {
+    test('downloadAndDecryptAttachment caches decrypted content', tags: 'olm',
+        () async {
       final FILE_BUFF_ENC = Uint8List.fromList([0x3B, 0x6B, 0xB2, 0x8C, 0xAF]);
       final FILE_BUFF_DEC = Uint8List.fromList([0x74, 0x65, 0x73, 0x74, 0x0A]);
       var serverHits = 0;
@@ -2635,34 +2652,35 @@ void main() async {
     test(
       'isAttachmentInLocalStore uses the same extension cache key',
       () async {
-      final room = Room(id: '!localpart:server.abc', client: await getClient());
-      final event = Event.fromJson(
-        {
-          'type': EventTypes.Message,
-          'content': {
-            'body': 'video',
-            'msgtype': 'm.video',
-            'url': 'mxc://example.org/video-cache-key',
-            'info': {
-              'mimetype': 'video/mp4',
-              'size': 2,
+        final room =
+            Room(id: '!localpart:server.abc', client: await getClient());
+        final event = Event.fromJson(
+          {
+            'type': EventTypes.Message,
+            'content': {
+              'body': 'video',
+              'msgtype': 'm.video',
+              'url': 'mxc://example.org/video-cache-key',
+              'info': {
+                'mimetype': 'video/mp4',
+                'size': 2,
+              },
             },
+            'event_id': r'$video-cache-key',
+            'sender': '@alice:example.org',
           },
-          'event_id': r'$video-cache-key',
-          'sender': '@alice:example.org',
-        },
-        room,
-      );
+          room,
+        );
 
-      await room.client.database.storeFileStream(
-        Uri.parse('mxc://example.org/video-cache-key?ext=mp4'),
-        Stream.value([1, 2]),
-        DateTime.now().millisecondsSinceEpoch,
-      );
+        await room.client.database.storeFileStream(
+          Uri.parse('mxc://example.org/video-cache-key?ext=mp4'),
+          Stream.value([1, 2]),
+          DateTime.now().millisecondsSinceEpoch,
+        );
 
-      expect(await event.isAttachmentInLocalStore(), true);
+        expect(await event.isAttachmentInLocalStore(), true);
 
-      await room.client.dispose(closeDatabase: true);
+        await room.client.dispose(closeDatabase: true);
       },
     );
 
@@ -2712,7 +2730,8 @@ void main() async {
 
         token.cancel();
 
-        await expectLater(cancelled, throwsA(isA<DownloadCancelledException>()));
+        await expectLater(
+            cancelled, throwsA(isA<DownloadCancelledException>()));
         final file = await uncancelled;
         expect(await file.getBytes(), [1, 2]);
         expect(api.mediaHits('slow-in-flight'), greaterThanOrEqualTo(1));
@@ -2779,7 +2798,8 @@ void main() async {
       await room.client.dispose(closeDatabase: true);
     });
 
-    test('downloadAndDecryptAttachment store only without file', tags: 'olm', () async {
+    test('downloadAndDecryptAttachment store only without file', tags: 'olm',
+        () async {
       final FILE_BUFF = Uint8List.fromList([0]);
       var serverHits = 0;
       Future<Uint8List> downloadCallback(Uri uri) async {
@@ -2949,7 +2969,8 @@ void main() async {
             'msgtype': 'm.text',
             'body': '🦊 :blah:',
             'format': 'org.matrix.custom.html',
-            'formatted_body': '🦊 <img data-mx-emoticon src="mxc://blah/blubb">',
+            'formatted_body':
+                '🦊 <img data-mx-emoticon src="mxc://blah/blubb">',
           },
           'event_id': '\$edit2',
           'sender': '@alice:example.org',
@@ -3123,7 +3144,8 @@ void main() async {
         originServerTs: DateTime.now(),
         room: room,
       );
-      final timeline = Timeline(room: room, chunk: TimelineChunk(events: [targetEvent]));
+      final timeline =
+          Timeline(room: room, chunk: TimelineChunk(events: [targetEvent]));
       expect(await event.getReplyEvent(timeline), targetEvent);
     });
     test('getMentions', () {

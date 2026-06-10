@@ -96,7 +96,8 @@ class MatrixFile {
     String? mimeType,
     required String path,
   }) {
-    final resolvedMime = mimeType ?? lookupMimeType(name) ?? 'application/octet-stream';
+    final resolvedMime =
+        mimeType ?? lookupMimeType(name) ?? 'application/octet-stream';
     final msgType = msgTypeFromMime(resolvedMime);
     if (msgType == MessageTypes.Image) {
       return MatrixImageFile(name: name, mimeType: mimeType, path: path);
@@ -122,11 +123,13 @@ class MatrixImageFile extends MatrixFile {
   })  : _width = width,
         _height = height,
         super(
-          mimeType: (mimeType == null || !mimeType.toLowerCase().startsWith('image/'))
-              ? (lookupMimeType(name)?.toLowerCase().startsWith('image/') == true
-                  ? lookupMimeType(name)
-                  : 'image/jpeg')
-              : mimeType,
+          mimeType:
+              (mimeType == null || !mimeType.toLowerCase().startsWith('image/'))
+                  ? (lookupMimeType(name)?.toLowerCase().startsWith('image/') ==
+                          true
+                      ? lookupMimeType(name)
+                      : 'image/jpeg')
+                  : mimeType,
         );
 
   /// Creates a new image file, writes any re-encoded bytes back to [path],
@@ -294,8 +297,9 @@ class MatrixImageFile extends MatrixFile {
       height: resized.height,
       originalHeight: image.height,
       originalWidth: image.width,
-      blurhash:
-          arguments.calcBlurhash ? BlurHash.encode(resized, numCompX: 4, numCompY: 3).hash : null,
+      blurhash: arguments.calcBlurhash
+          ? BlurHash.encode(resized, numCompX: 4, numCompY: 3).hash
+          : null,
     );
   }
 }

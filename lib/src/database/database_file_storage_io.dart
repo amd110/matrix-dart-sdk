@@ -30,8 +30,8 @@ mixin DatabaseFileStorage {
     );
   }
 
-
-  Future<void> storeFileStream(Uri mxcUri, Stream<List<int>> stream, int time) async {
+  Future<void> storeFileStream(
+      Uri mxcUri, Stream<List<int>> stream, int time) async {
     final fileStorageLocation = this.fileStorageLocation;
     if (!supportsFileStoring || fileStorageLocation == null) {
       await stream.drain();
@@ -39,7 +39,8 @@ mixin DatabaseFileStorage {
     }
 
     final file = _getFileFromMxc(mxcUri);
-    final tmpFile = File('${file.path}_${DateTime.now().millisecondsSinceEpoch}_${randomAlphaNumeric(6)}.tmp');
+    final tmpFile = File(
+        '${file.path}_${DateTime.now().millisecondsSinceEpoch}_${randomAlphaNumeric(6)}.tmp');
     final sink = tmpFile.openWrite();
     var bytesWritten = 0;
     try {
@@ -48,7 +49,7 @@ mixin DatabaseFileStorage {
         return chunk;
       }));
       await sink.close();
-      
+
       if (bytesWritten == 0) {
         try {
           if (await tmpFile.exists()) await tmpFile.delete();
@@ -141,7 +142,6 @@ mixin DatabaseFileStorage {
     return true;
   }
 
-
   /// Downloads [stream] directly to a file, returning the [File] object.
   /// Uses a temporary file during download to ensure the target file is only created upon completion.
   /// Throws [UnsupportedError] if file storage is not supported or [fileStorageLocation] is null.
@@ -153,7 +153,8 @@ mixin DatabaseFileStorage {
   }) async {
     final fileStorageLocation = this.fileStorageLocation;
     if (!supportsFileStoring || fileStorageLocation == null) {
-      throw UnsupportedError('File storage is not supported or configured on this platform.');
+      throw UnsupportedError(
+          'File storage is not supported or configured on this platform.');
     }
 
     final targetFile = _getFileFromMxc(mxcUri);
@@ -171,7 +172,7 @@ mixin DatabaseFileStorage {
         '${DateTime.now().millisecondsSinceEpoch}${randomAlphaNumeric(16)}.tmp',
       ),
     );
-    
+
     final sink = tmpFile.openWrite();
     try {
       var received = 0;
@@ -182,7 +183,7 @@ mixin DatabaseFileStorage {
         return chunk;
       }));
       await sink.close();
-      
+
       // Rename temporary file to the final target file.
       // Rename is generally atomic on POSIX systems.
       return await tmpFile.rename(targetFile.path);

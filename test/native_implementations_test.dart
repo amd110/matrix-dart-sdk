@@ -9,7 +9,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:test/test.dart';
 
-import 'package:matrix/matrix.dart' show CancellationToken, DownloadCancelledException;
+import 'package:matrix/matrix.dart'
+    show CancellationToken, DownloadCancelledException;
 import 'package:matrix/src/utils/crypto/encrypted_file.dart' as crypto_utils;
 import 'package:matrix/src/utils/native_implementations.dart';
 
@@ -31,7 +32,6 @@ class _TestableIsolate extends NativeImplementationsPersistentIsolate {
 Future<void> _alwaysFailInit() async {
   throw Exception('test: vodozemacInit 故意失败');
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // isolate 生命周期测试（无 olm 标签，不需要 vodozemac）
@@ -64,7 +64,8 @@ void main() {
       stopwatch.stop();
 
       expect(thrown, isNotNull, reason: '应抛出错误');
-      expect(thrown, isA<IsolateDeadError>(), reason: '应抛出 IsolateDeadError 而非 TimeoutException');
+      expect(thrown, isA<IsolateDeadError>(),
+          reason: '应抛出 IsolateDeadError 而非 TimeoutException');
       // 应在 1 秒内感知到 isolate 死亡（onExit 通知），远比 30s 超时快
       expect(
         stopwatch.elapsed.inMilliseconds,
@@ -86,7 +87,8 @@ void main() {
         (_) => impl
             .decryptFile(
               crypto_utils.EncryptedFile(
-                path: '/no_such_file_${DateTime.now().microsecondsSinceEpoch}.enc',
+                path:
+                    '/no_such_file_${DateTime.now().microsecondsSinceEpoch}.enc',
                 k: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
                 iv: 'AAAAAAAAAAAAAAAA',
                 sha256: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
@@ -240,7 +242,8 @@ void main() {
 
       // 构造一个不存在的加密文件（isolate 会立即报错），但取消先于 isolate 处理
       final missingFile = crypto_utils.EncryptedFile(
-        path: '/no_such_file_cancel_test_${DateTime.now().microsecondsSinceEpoch}.enc',
+        path:
+            '/no_such_file_cancel_test_${DateTime.now().microsecondsSinceEpoch}.enc',
         k: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         iv: 'AAAAAAAAAAAAAAAA',
         sha256: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
@@ -252,16 +255,19 @@ void main() {
 
       Object? thrown;
       try {
-        await impl.decryptFile(missingFile, cancellationToken: token, retryInDummy: false);
+        await impl.decryptFile(missingFile,
+            cancellationToken: token, retryInDummy: false);
       } catch (e) {
         thrown = e;
       }
 
-      expect(thrown, isA<DownloadCancelledException>(), reason: '已取消的 token 应立即抛出 DownloadCancelledException');
+      expect(thrown, isA<DownloadCancelledException>(),
+          reason: '已取消的 token 应立即抛出 DownloadCancelledException');
     });
 
     // 取消：正在排队中途取消，应跳过该请求
-    test('请求进入队列后取消 token，isolate 跳过执行并抛出 DownloadCancelledException', () async {
+    test('请求进入队列后取消 token，isolate 跳过执行并抛出 DownloadCancelledException',
+        () async {
       final impl = _TestableIsolate(spawnTimeout: const Duration(seconds: 5));
       addTearDown(impl.dispose);
 
@@ -269,16 +275,20 @@ void main() {
 
       // 用一个会实际执行的文件（/dev/null）构造第一个"占坑"请求，让 isolate 忙碌
       final occupyToken = CancellationToken();
-      final occupyFuture = impl.encryptFile(
-        File('/dev/null'),
-        cancellationToken: occupyToken,
-        retryInDummy: false,
-      ).catchError((_) => crypto_utils.EncryptedFile(path: '', k: '', iv: '', sha256: ''));
+      final occupyFuture = impl
+          .encryptFile(
+            File('/dev/null'),
+            cancellationToken: occupyToken,
+            retryInDummy: false,
+          )
+          .catchError((_) =>
+              crypto_utils.EncryptedFile(path: '', k: '', iv: '', sha256: ''));
 
       // 第二个请求：先入队，稍后取消
       final cancelToken = CancellationToken();
       final missingFile = crypto_utils.EncryptedFile(
-        path: '/no_such_file_queue_cancel_${DateTime.now().microsecondsSinceEpoch}.enc',
+        path:
+            '/no_such_file_queue_cancel_${DateTime.now().microsecondsSinceEpoch}.enc',
         k: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         iv: 'AAAAAAAAAAAAAAAA',
         sha256: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
@@ -308,7 +318,8 @@ void main() {
       );
     });
 
-    test('CancellationToken whenCancelled 连续/并发获取不会抛出 Completer StateError', () async {
+    test('CancellationToken whenCancelled 连续/并发获取不会抛出 Completer StateError',
+        () async {
       final token = CancellationToken();
       token.cancel();
 
@@ -321,7 +332,8 @@ void main() {
   // ─────────────────────────────────────────────────────────────────────────
   // 加密 round-trip 测试（需要 vodozemac，打 olm 标签）
   // ─────────────────────────────────────────────────────────────────────────
-  group('NativeImplementationsPersistentIsolate 加密 round-trip', tags: 'olm', () {
+  group('NativeImplementationsPersistentIsolate 加密 round-trip', tags: 'olm',
+      () {
     late _TestableIsolate impl;
 
     setUp(() {

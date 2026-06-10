@@ -34,7 +34,8 @@ void main() {
     Logs().level = Level.error;
     test('Decrypt', () async {
       const text = 'hello world';
-      final tmpFile = File('${Directory.systemTemp.path}/matrix_test_encrypt.txt');
+      final tmpFile =
+          File('${Directory.systemTemp.path}/matrix_test_encrypt.txt');
       await tmpFile.writeAsBytes(Uint8List.fromList(text.codeUnits));
       final file = MatrixFile(name: 'file.txt', path: tmpFile.path);
 
@@ -51,7 +52,8 @@ void main() {
       );
 
       if (resp.statusCode == 200) {
-        final tmpJpg = File('${Directory.systemTemp.path}/matrix_test_shrink.jpg');
+        final tmpJpg =
+            File('${Directory.systemTemp.path}/matrix_test_shrink.jpg');
         await tmpJpg.writeAsBytes(resp.bodyBytes);
         final file = MatrixImageFile(name: 'file.jpg', path: tmpJpg.path);
         expect((await file.getBytes()).isNotEmpty, true);

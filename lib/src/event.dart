@@ -19,6 +19,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:collection/collection.dart';
 import 'package:html/parser.dart';
@@ -679,7 +680,7 @@ class Event extends MatrixEvent {
   /// Throws an exception if the scheme is not `mxc` or the homeserver is not
   /// set.
   ///
-  /// Important! To use this link you have to set a http header like this:
+  /// Scanner and authenticated media URLs may need an authorization header:
   /// `headers: {"authorization": "Bearer ${client.accessToken}"}`
   Future<Uri?> getAttachmentUri({
     bool getThumbnail = false,
@@ -737,9 +738,13 @@ class Event extends MatrixEvent {
   /// Throws an exception if the scheme is not `mxc` or the homeserver is not
   /// set.
   ///
-  /// Important! To use this link you have to set a http header like this:
+  /// Deprecated: scanner-unaware. Use [getAttachmentUri] instead.
+  ///
+  /// This URL may need an authorization header:
   /// `headers: {"authorization": "Bearer ${client.accessToken}"}`
-  @Deprecated('Use getAttachmentUri() instead')
+  @Deprecated(
+    'Use getAttachmentUri() instead. This legacy helper is scanner-unaware.',
+  )
   Uri? getAttachmentUrl({
     bool getThumbnail = false,
     bool useThumbnailMxcUrl = false,
@@ -814,6 +819,10 @@ class Event extends MatrixEvent {
   /// true to download the thumbnail instead. Set [fromLocalStoreOnly] to true
   /// if you want to retrieve the attachment from the local store only without
   /// making http request.
+  ///
+  /// With `Client.contentScannerConfig`, network downloads use the scanner.
+  /// Scanner errors throw [ContentScannerException]. For encrypted scanner
+  /// downloads, [downloadCallback] is ignored.
   Future<MatrixFile> downloadAndDecryptAttachment({
     bool getThumbnail = false,
     bool fromLocalStoreOnly = false,
@@ -927,37 +936,80 @@ class Event extends MatrixEvent {
 
     File? downloadedFile;
     // 下载文件
+    final scanner = room.client.contentScannerConfig;
+    final useScannerForEncrypted = scanner != null && isEncrypted;
     final canDownloadFileFromServer = !fromLocalStoreOnly;
     if (canDownloadFileFromServer) {
-      // 下载开始前检查取消标志，避免发起无效请求
       cancellationToken?.throwIfCancelled();
-      final httpClient = room.client.httpClient;
-      final resolveSw = profiling ? (Stopwatch()..start()) : null;
-      final downloadUri = await mxcUrl.getDownloadUri(room.client);
-      if (resolveSw != null) resolveUriMicros = resolveSw.elapsedMicroseconds;
-
-      final request = http.Request('GET', downloadUri);
-      request.headers['authorization'] = 'Bearer ${room.client.accessToken}';
       final downloadSw = profiling ? (Stopwatch()..start()) : null;
-      final ttfbSw = profiling ? (Stopwatch()..start()) : null;
-      final response = await httpClient.send(request);
-      if (ttfbSw != null) ttfbMicros = ttfbSw.elapsedMicroseconds;
+      if (useScannerForEncrypted) {
+        // For encrypted media with scanner, use POST download_encrypted endpoint
+        // which returns decrypted bytes directly (no stream needed).
+        final fileMap = getThumbnail
+            ? infoMap.tryGetMap<String, Object?>('thumbnail_file')
+            : content.tryGetMap<String, Object?>('file');
+        if (fileMap == null) throw ('No encrypted file info found');
 
-      // Safe cast: supportsFileStoring == true only when MatrixSdkDatabase
-      // (the sole DatabaseApi implementation) has the DatabaseFileStorage
-      // mixin applied and fileStorageLocation is non-null.
-      final bodySw = profiling ? (Stopwatch()..start()) : null;
-      downloadedFile =
-          await (database as DatabaseFileStorage).downloadToFileViaStream(
-        response.stream,
-        mxcUrl,
-        onProgress: onDownloadProgress,
-        cancellationToken: cancellationToken,
-      );
-      if (downloadSw != null) {
-        bodyMicros = bodySw!.elapsedMicroseconds;
-        downloadMicros = downloadSw.elapsedMicroseconds;
-        downloadedBytes = await downloadedFile.length();
+        final uint8list = await _downloadEncryptedAttachmentViaScanner(
+          scanner: scanner,
+          fileMap: fileMap,
+        );
+        final storeSw = profiling ? (Stopwatch()..start()) : null;
+        // Write scanner-decrypted bytes to a temp file, then promote to cache.
+        final tempFile = await File(
+          '${Directory.systemTemp.path}/'
+          'matrix_scanner_${mxcUrl.toString().replaceAll(RegExp(r'[:/]'), '_')}.tmp',
+        ).writeAsBytes(uint8list);
+        await (database as DatabaseFileStorage).storeFileFromPath(
+          cacheKey,
+          tempFile.path,
+          DateTime.now().millisecondsSinceEpoch,
+        );
+        downloadedFile = await database.getFile(cacheKey);
+        if (storeSw != null) storeMicros = storeSw.elapsedMicroseconds;
+      } else {
+        // 下载开始前检查取消标志，避免发起无效请求
+        final httpClient = room.client.httpClient;
+        final resolveSw = profiling ? (Stopwatch()..start()) : null;
+        final downloadUri = await mxcUrl.getDownloadUri(room.client);
+        if (resolveSw != null) resolveUriMicros = resolveSw.elapsedMicroseconds;
+
+        final request = http.Request('GET', downloadUri);
+        if (scanner == null || scanner.withAuthHeader) {
+          request.headers['authorization'] =
+              'Bearer ${room.client.accessToken}';
+        }
+        final ttfbSw = profiling ? (Stopwatch()..start()) : null;
+        final response = await httpClient.send(request);
+        if (ttfbSw != null) ttfbMicros = ttfbSw.elapsedMicroseconds;
+
+        if (scanner != null &&
+            (response.statusCode < 200 || response.statusCode >= 300)) {
+          throw parseContentScannerError(
+            await http.Response.fromStream(response),
+          );
+        }
+        if (scanner == null && response.statusCode >= 400) {
+          room.client
+              .unexpectedResponse(response, await response.stream.toBytes());
+        }
+
+        // Safe cast: supportsFileStoring == true only when MatrixSdkDatabase
+        // (the sole DatabaseApi implementation) has the DatabaseFileStorage
+        // mixin applied and fileStorageLocation is non-null.
+        final bodySw = profiling ? (Stopwatch()..start()) : null;
+        downloadedFile =
+            await (database as DatabaseFileStorage).downloadToFileViaStream(
+          response.stream,
+          mxcUrl,
+          onProgress: onDownloadProgress,
+          cancellationToken: cancellationToken,
+        );
+        if (downloadSw != null) {
+          bodyMicros = bodySw!.elapsedMicroseconds;
+          downloadMicros = downloadSw.elapsedMicroseconds;
+          downloadedBytes = await downloadedFile.length();
+        }
       }
     } else {
       throw ('Unable to download file from local store.');
@@ -965,7 +1017,9 @@ class Event extends MatrixEvent {
 
     // 解密文件前再次检查取消标志，避免对已取消的任务执行耗时的 AES 解密
     cancellationToken?.throwIfCancelled();
-    if (isEncrypted) {
+    // Scanner downloads for encrypted media return already-decrypted bytes.
+    if (isEncrypted && !useScannerForEncrypted) {
+      if (downloadedFile == null) throw Exception('Downloaded file is missing');
       final fileMap = getThumbnail
           ? infoMap.tryGetMap<String, Object?>('thumbnail_file')
           : content.tryGetMap<String, Object?>('file');
@@ -1028,6 +1082,26 @@ class Event extends MatrixEvent {
           : filename,
       mimeType: attachmentMimetype,
     );
+  }
+
+  Future<Uint8List> _downloadEncryptedAttachmentViaScanner({
+    required MatrixContentScannerConfig scanner,
+    required Map<String, Object?> fileMap,
+  }) async {
+    final request = http.Request('POST', scanner.downloadEncryptedUri);
+    request.headers['content-type'] = 'application/json';
+    if (scanner.withAuthHeader) {
+      request.headers['authorization'] = 'Bearer ${room.client.accessToken}';
+    }
+    request.body = jsonEncode({'file': fileMap});
+
+    final streamed = await room.client.httpClient.send(request);
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw parseContentScannerError(response);
+    }
+
+    return response.bodyBytes;
   }
 
   /// Returns if this is a known event type.
@@ -1103,11 +1177,12 @@ class Event extends MatrixEvent {
     bool plaintextBody = false,
     bool removeMarkdown = false,
   }) {
-    if (redacted) {
+    final redactedBecause = this.redactedBecause;
+    if (redactedBecause != null) {
       if (status.intValue < EventStatus.synced.intValue) {
         return i18n.cancelledSend;
       }
-      return i18n.removedBy(this);
+      return i18n.removedBy(redactedBecause);
     }
 
     final body = calcUnlocalizedBody(

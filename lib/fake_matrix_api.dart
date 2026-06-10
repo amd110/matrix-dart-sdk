@@ -20,6 +20,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:core';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:http/http.dart';
 
@@ -170,6 +171,57 @@ class FakeMatrixApi extends BaseClient {
         ],
         'unstable_features': {'m.lazy_load_members': true},
       };
+    } else if (method == 'PUT' &&
+        _client != null &&
+        action.contains('/account_data/') &&
+        !action.contains('/rooms/')) {
+      // Mirror user-level account-data PUTs back via handleSync before any
+      // explicit per-endpoint stub runs, so SSSS._waitForAccountDataFromSync
+      // and similar callers always observe the round-trip a real homeserver
+      // would produce.
+      final type = Uri.decodeComponent(action.split('/').last);
+      final syncUpdate = sdk.SyncUpdate(
+        nextBatch: '',
+        accountData: [sdk.BasicEvent(content: decodeJson(data), type: type)],
+      );
+      if (_client?.database != null) {
+        await _client?.database.transaction(() async {
+          await _client?.handleSync(syncUpdate);
+        });
+      } else {
+        await _client?.handleSync(syncUpdate);
+      }
+      res = {};
+    } else if (method == 'PUT' &&
+        _client != null &&
+        action.contains('/account_data/') &&
+        action.contains('/rooms/')) {
+      final segments = action.split('/');
+      final type = Uri.decodeComponent(segments.last);
+      final roomId = Uri.decodeComponent(segments[segments.length - 3]);
+      final syncUpdate = sdk.SyncUpdate(
+        nextBatch: '',
+        rooms: RoomsUpdate(
+          join: {
+            roomId: JoinedRoomUpdate(
+              accountData: [
+                sdk.BasicEvent(
+                  content: decodeJson(data),
+                  type: type,
+                ),
+              ],
+            ),
+          },
+        ),
+      );
+      if (_client?.database != null) {
+        await _client?.database.transaction(() async {
+          await _client?.handleSync(syncUpdate);
+        });
+      } else {
+        await _client?.handleSync(syncUpdate);
+      }
+      res = {};
     } else {
       final act = api[method]?[action];
       if (act != null) {
@@ -238,53 +290,6 @@ class FakeMatrixApi extends BaseClient {
             'signed_curve25519': 100,
           },
         };
-      } else if (method == 'PUT' &&
-          _client != null &&
-          action.contains('/account_data/') &&
-          !action.contains('/rooms/')) {
-        final type = Uri.decodeComponent(action.split('/').last);
-        final syncUpdate = sdk.SyncUpdate(
-          nextBatch: '',
-          accountData: [sdk.BasicEvent(content: decodeJson(data), type: type)],
-        );
-        if (_client?.database != null) {
-          await _client?.database.transaction(() async {
-            await _client?.handleSync(syncUpdate);
-          });
-        } else {
-          await _client?.handleSync(syncUpdate);
-        }
-        res = {};
-      } else if (method == 'PUT' &&
-          _client != null &&
-          action.contains('/account_data/') &&
-          action.contains('/rooms/')) {
-        final segments = action.split('/');
-        final type = Uri.decodeComponent(segments.last);
-        final roomId = Uri.decodeComponent(segments[segments.length - 3]);
-        final syncUpdate = sdk.SyncUpdate(
-          nextBatch: '',
-          rooms: RoomsUpdate(
-            join: {
-              roomId: JoinedRoomUpdate(
-                accountData: [
-                  sdk.BasicEvent(
-                    content: decodeJson(data),
-                    type: type,
-                  ),
-                ],
-              ),
-            },
-          ),
-        );
-        if (_client?.database != null) {
-          await _client?.database.transaction(() async {
-            await _client?.handleSync(syncUpdate);
-          });
-        } else {
-          await _client?.handleSync(syncUpdate);
-        }
-        res = {};
       } else {
         res = {
           'errcode': 'M_UNRECOGNIZED',
@@ -299,6 +304,9 @@ class FakeMatrixApi extends BaseClient {
         _apiCallStream.add(action);
       }),
     );
+    if (res is Uint8List) {
+      return Response.bytes(res, statusCode);
+    }
     return Response.bytes(utf8.encode(json.encode(res)), statusCode);
   }
 
@@ -1230,6 +1238,12 @@ class FakeMatrixApi extends BaseClient {
                 'matrix:image:size': 102400,
               },
       '/media/v3/config': (var req) => {'m.upload.size': 50000000},
+      '/client/v1/media/download/example.org/abcd1234ascii': (var req) =>
+          Uint8List(100),
+      '/client/v1/media/download/example.org/file': (var req) =>
+          Uint8List.fromList([0]),
+      '/client/v1/media/download/example.org/thumb': (var req) =>
+          Uint8List.fromList([2]),
       '/client/v1/media/config': (var req) => {'m.upload.size': 50000000},
       '/.well-known/matrix/client': (var req) => {
             'm.homeserver': {'base_url': 'https://fakeserver.notexisting'},

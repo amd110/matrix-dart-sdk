@@ -593,7 +593,8 @@ void main() {
     });
 
     test('setAvatar', () async {
-      final tmpAvatar = File('${Directory.systemTemp.path}/matrix_test_avatar.jpeg');
+      final tmpAvatar =
+          File('${Directory.systemTemp.path}/matrix_test_avatar.jpeg');
       await tmpAvatar.writeAsBytes(Uint8List(0));
       final testFile = MatrixFile(name: 'file.jpeg', path: tmpAvatar.path);
       await matrix.setAvatar(testFile);

@@ -197,7 +197,8 @@ void main() {
 
     test('thread_image', () async {
       FakeMatrixApi.calledEndpoints.clear();
-      final tmpImg = File('${Directory.systemTemp.path}/matrix_test_thread.jpeg');
+      final tmpImg =
+          File('${Directory.systemTemp.path}/matrix_test_thread.jpeg');
       await tmpImg.writeAsBytes(Uint8List(0));
       final testImage = MatrixFile(name: 'file.jpeg', path: tmpImg.path);
       await room.sendFileEvent(

@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:meta/meta.dart';
+import 'package:vodozemac_plus/vodozemac_plus.dart';
 
 import 'package:matrix/encryption.dart';
+import 'package:matrix/encryption/utils/base64_unpadded.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix/src/utils/compute_callback.dart';
 import 'package:matrix/src/utils/crypto/encrypted_file.dart' as crypto_utils;
@@ -57,6 +60,8 @@ abstract class NativeImplementations {
     CancellationToken? cancellationToken,
   });
 
+  FutureOr<bool> checkSecretStorageKey(CheckSecretStorageKeyArgs args);
+
   @override
   dynamic noSuchMethod(Invocation invocation) {
     final dynamic argument = invocation.positionalArguments.single;
@@ -84,10 +89,24 @@ abstract class NativeImplementations {
       case 'decryptFile':
         // ignore: discarded_futures
         return dummy.decryptFile(argument);
+      case 'checkSecretStorageKey':
+        return dummy.checkSecretStorageKey(argument);
       default:
         return super.noSuchMethod(invocation);
     }
   }
+}
+
+class CheckSecretStorageKeyArgs {
+  final Uint8List key;
+  final String iv;
+  final String mac;
+
+  const CheckSecretStorageKeyArgs({
+    required this.key,
+    required this.iv,
+    required this.mac,
+  });
 }
 
 class NativeImplementationsDummy extends NativeImplementations {
@@ -136,6 +155,47 @@ class NativeImplementationsDummy extends NativeImplementations {
     CancellationToken? cancellationToken,
   }) =>
       crypto_utils.decryptFile(encryptedFile);
+
+  @override
+  FutureOr<bool> checkSecretStorageKey(CheckSecretStorageKeyArgs args) {
+    final iv = base64decodeUnpadded(args.iv);
+    iv[8] &= 0x7f;
+
+    final zerosalt = Uint8List(8);
+    final prk = CryptoUtils.hmac(key: zerosalt, input: args.key);
+    final b = Uint8List(1);
+
+    b[0] = 1;
+    final aesKey = CryptoUtils.hmac(
+      key: prk,
+      input: utf8.encode('') + b,
+    );
+
+    b[0] = 2;
+    final hmacKey = CryptoUtils.hmac(
+      key: prk,
+      input: aesKey + utf8.encode('') + b,
+    );
+
+    const zeroStr =
+        '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00';
+
+    final plain = Uint8List.fromList(utf8.encode(zeroStr));
+    final ciphertext = CryptoUtils.aesCtr(
+      input: plain,
+      key: Uint8List.fromList(aesKey),
+      iv: iv,
+    );
+    final computedMac = CryptoUtils.hmac(
+      key: Uint8List.fromList(hmacKey),
+      input: ciphertext,
+    );
+
+    final expected = args.mac.replaceAll(RegExp(r'=+$'), '');
+    final actual = base64.encode(computedMac).replaceAll(RegExp(r'=+$'), '');
+    return expected == actual;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -158,7 +218,11 @@ class _CancelRequest {
 
 /// isolate 返回给调用方的回复记录。
 /// [stackTrace] 仅在 [error] 非空时有值，用于还原 isolate 内部栈轨迹。
-typedef _NativeReply = ({Object? result, Object? error, StackTrace? stackTrace});
+typedef _NativeReply = ({
+  Object? result,
+  Object? error,
+  StackTrace? stackTrace
+});
 
 class _NativeIsolateInitArgs {
   final SendPort readyPort;
@@ -216,21 +280,28 @@ Future<void> _persistentIsolateMain(_NativeIsolateInitArgs args) async {
     }
 
     try {
-      final result = await Future.value(switch (message.method) {
-        'encryptFile' => dummy.encryptFile(message.arg as File),
-        'decryptFile' => dummy.decryptFile(message.arg as EncryptedFile),
-        'generateUploadKeys' =>
-          dummy.generateUploadKeys(message.arg as GenerateUploadKeysArgs),
-        'keyFromPassphrase' =>
-          dummy.keyFromPassphrase(message.arg as KeyFromPassphraseArgs),
-        'shrinkImage' => Future.value(
-            dummy.shrinkImage(message.arg as MatrixImageFileResizeArguments),
-          ),
-        'calcImageMetadata' => Future.value(
-            dummy.calcImageMetadata(message.arg as Uint8List),
-          ),
-        _ => throw UnsupportedError('Unknown method: ${message.method}'),
-      },);
+      final result = await Future.value(
+        switch (message.method) {
+          'encryptFile' => dummy.encryptFile(message.arg as File),
+          'decryptFile' => dummy.decryptFile(message.arg as EncryptedFile),
+          'generateUploadKeys' =>
+            dummy.generateUploadKeys(message.arg as GenerateUploadKeysArgs),
+          'keyFromPassphrase' =>
+            dummy.keyFromPassphrase(message.arg as KeyFromPassphraseArgs),
+          'shrinkImage' => Future.value(
+              dummy.shrinkImage(message.arg as MatrixImageFileResizeArguments),
+            ),
+          'calcImageMetadata' => Future.value(
+              dummy.calcImageMetadata(message.arg as Uint8List),
+            ),
+          'checkSecretStorageKey' => Future.value(
+              dummy.checkSecretStorageKey(
+                message.arg as CheckSecretStorageKeyArgs,
+              ),
+            ),
+          _ => throw UnsupportedError('Unknown method: ${message.method}'),
+        },
+      );
       // 每次回复都携带 stackTrace 字段，便于调用方还原错误现场。
       message.replyPort.send(
         (result: result, error: null, stackTrace: null) as _NativeReply,
@@ -358,7 +429,8 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
       onExitPort.close();
       onErrorPort.close();
       isolate.kill(priority: Isolate.beforeNextEvent);
-      throw StateError('NativeImplementationsPersistentIsolate 在 spawn 期间被 dispose');
+      throw StateError(
+          'NativeImplementationsPersistentIsolate 在 spawn 期间被 dispose');
     }
 
     if (response is! SendPort) {
@@ -485,6 +557,9 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
         d.shrinkImage(arg as MatrixImageFileResizeArguments) as FutureOr<T>,
       'calcImageMetadata' =>
         d.calcImageMetadata(arg as Uint8List) as FutureOr<T>,
+      'checkSecretStorageKey' =>
+        d.checkSecretStorageKey(arg as CheckSecretStorageKeyArgs)
+            as FutureOr<T>,
       _ => throw UnsupportedError('Unknown method: $method'),
     };
   }
@@ -519,7 +594,8 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
     bool retryInDummy = true,
     CancellationToken? cancellationToken,
   }) =>
-      _call('encryptFile', file, retryInDummy: retryInDummy, cancellationToken: cancellationToken);
+      _call('encryptFile', file,
+          retryInDummy: retryInDummy, cancellationToken: cancellationToken);
 
   @override
   Future<File> decryptFile(
@@ -527,7 +603,8 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
     bool retryInDummy = true,
     CancellationToken? cancellationToken,
   }) =>
-      _call('decryptFile', encryptedFile, retryInDummy: retryInDummy, cancellationToken: cancellationToken);
+      _call('decryptFile', encryptedFile,
+          retryInDummy: retryInDummy, cancellationToken: cancellationToken);
 
   @override
   Future<RoomKeys> generateUploadKeys(
@@ -556,6 +633,10 @@ class NativeImplementationsPersistentIsolate extends NativeImplementations {
     bool retryInDummy = false,
   }) =>
       _call('calcImageMetadata', bytes, retryInDummy: retryInDummy);
+
+  @override
+  Future<bool> checkSecretStorageKey(CheckSecretStorageKeyArgs args) =>
+      _call('checkSecretStorageKey', args, retryInDummy: true);
 }
 
 /// 基于 Flutter `compute` 的 [NativeImplementations]。
@@ -571,8 +652,7 @@ class NativeImplementationsIsolate extends NativeImplementations {
     this.vodozemacInit,
   });
 
-  Future<T> _run<T, U>(FutureOr<T> Function(U) fn, U arg) =>
-      compute(fn, arg);
+  Future<T> _run<T, U>(FutureOr<T> Function(U) fn, U arg) => compute(fn, arg);
 
   @override
   Future<EncryptedFile> encryptFile(
@@ -641,4 +721,15 @@ class NativeImplementationsIsolate extends NativeImplementations {
     bool retryInDummy = false,
   }) =>
       _run(NativeImplementations.dummy.calcImageMetadata, bytes);
+
+  @override
+  Future<bool> checkSecretStorageKey(CheckSecretStorageKeyArgs args) {
+    return _run<bool, CheckSecretStorageKeyArgs>(
+      (CheckSecretStorageKeyArgs args) async {
+        await vodozemacInit?.call();
+        return NativeImplementations.dummy.checkSecretStorageKey(args);
+      },
+      args,
+    );
+  }
 }

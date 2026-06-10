@@ -73,6 +73,7 @@ export 'src/utils/pushrule_evaluator.dart';
 export 'src/models/receipts.dart';
 export 'src/utils/sync_update_extension.dart';
 export 'src/utils/to_device_event.dart';
+export 'src/utils/content_scanner_config.dart';
 export 'src/utils/uia_request.dart';
 export 'src/utils/uri_extension.dart';
 export 'src/models/login_type.dart';
