@@ -943,8 +943,8 @@ class Event extends MatrixEvent {
       cancellationToken?.throwIfCancelled();
       final downloadSw = profiling ? (Stopwatch()..start()) : null;
       if (useScannerForEncrypted) {
-        // For encrypted media with scanner, use POST download_encrypted endpoint
-        // which returns decrypted bytes directly (no stream needed).
+        // 配置了 Content Scanner 且文件已加密：将加密元数据（含密钥）POST 给 Scanner，
+        // 由 Scanner 完成下载与解密后返回明文字节，无需本地 AES 解密流程。
         final fileMap = getThumbnail
             ? infoMap.tryGetMap<String, Object?>('thumbnail_file')
             : content.tryGetMap<String, Object?>('file');
@@ -955,7 +955,7 @@ class Event extends MatrixEvent {
           fileMap: fileMap,
         );
         final storeSw = profiling ? (Stopwatch()..start()) : null;
-        // Write scanner-decrypted bytes to a temp file, then promote to cache.
+        // 将 Scanner 已解密的字节先写入临时文件，再通过 storeFileFromPath 提升为持久缓存。
         final tempFile = await File(
           '${Directory.systemTemp.path}/'
           'matrix_scanner_${mxcUrl.toString().replaceAll(RegExp(r'[:/]'), '_')}.tmp',
@@ -994,9 +994,8 @@ class Event extends MatrixEvent {
               .unexpectedResponse(response, await response.stream.toBytes());
         }
 
-        // Safe cast: supportsFileStoring == true only when MatrixSdkDatabase
-        // (the sole DatabaseApi implementation) has the DatabaseFileStorage
-        // mixin applied and fileStorageLocation is non-null.
+        // 安全强转：supportsFileStoring 为 true 时，database 必定是混入了
+        // DatabaseFileStorage 且 fileStorageLocation 非空的 MatrixSdkDatabase。
         final bodySw = profiling ? (Stopwatch()..start()) : null;
         downloadedFile =
             await (database as DatabaseFileStorage).downloadToFileViaStream(
@@ -1017,7 +1016,7 @@ class Event extends MatrixEvent {
 
     // 解密文件前再次检查取消标志，避免对已取消的任务执行耗时的 AES 解密
     cancellationToken?.throwIfCancelled();
-    // Scanner downloads for encrypted media return already-decrypted bytes.
+    // Scanner 加密下载路径已在服务端完成解密，无需再次本地解密。
     if (isEncrypted && !useScannerForEncrypted) {
       if (downloadedFile == null) throw Exception('Downloaded file is missing');
       final fileMap = getThumbnail
