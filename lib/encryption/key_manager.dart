@@ -361,6 +361,10 @@ class KeyManager {
     }
 
     if (!wipe) {
+      // 复用现有 outbound session 前先刷新 outdated 用户设备列表，
+      // 否则 device_lists.changed 尚未处理时会漏掉对端新登录的设备，
+      // 导致这条消息其新设备永远解不开（直到下次 sync 后再发消息时增量分发）。
+      await client.updateUserDeviceKeys();
       // next check if the devices in the room changed
       final devicesToReceive = <DeviceKeys>[];
       final newDeviceKeys = await room.getUserDeviceKeys();
@@ -557,6 +561,9 @@ class KeyManager {
       );
     }
 
+    // 在创建新 outbound megolm session 前刷新所有被 sync 标为 outdated 的用户设备列表，
+    // 避免 device_lists.changed 还未被本端 sync 处理时漏发 m.room_key 给对端新设备。
+    await client.updateUserDeviceKeys();
     final deviceKeys = await room.getUserDeviceKeys();
     final deviceKeyIds = _getDeviceKeyIdMap(deviceKeys);
     deviceKeys.removeWhere((k) => !k.encryptToDevice);
